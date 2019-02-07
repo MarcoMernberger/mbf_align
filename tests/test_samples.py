@@ -9,7 +9,7 @@ from mbf_align.strategies import (
     FASTQsFromJob,
     build_fastq_strategy,
 )
-from mbf_align.rawlanes import Sample
+from mbf_align import Sample
 from mbf_align import PairingError
 from mbf_align import fastq2
 

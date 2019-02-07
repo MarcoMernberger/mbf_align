@@ -1,6 +1,6 @@
 # forwards for compatibility with old chipseq code
 
-from .rawlanes import Sample
+from .raw import Sample
 
 
 all = [Sample]

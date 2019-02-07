@@ -15,20 +15,18 @@ class Sample:
         pairing="single",
         vid=None,
     ):
-        """A sequenced sample, represented by one or more fastq2 files
+        """A sequenced sample, represented by one or more fastq files
 
         Paramaters
         ----------
             sample_name: str
-                name of sample
-            input_strategy:  strategies.FASTQs* object, str, or ppg.(Multi)FileGeneratingJob
-                if str, must be a path to a fastq, or a folder of fastqs.
+                name of sample - must be unique
+            input_strategy:  varied
+                see build_fastq_strategy
             reverse_reads: bool
                 whether to reverse the reads before processing
             fastq_processor: fastq2.*
                 Preprocessing strategy
-            vid: str
-                sample identification number
             pairing: 'single', 'paired', 'only_first', 'only_second', 'paired_as_first'
                 default: 'single'
                 'single' -> single end sequencing
@@ -36,7 +34,8 @@ class Sample:
                 'only_first -> 'paired end' sequencing, but take only R1 reads
                 'only_second' -> 'paired end' sequencing, but take only R2 reads
                 'paired_as_single' -> treat each fragment as an independent read
-
+            vid: str
+                sample identification number
         """
         self.name = sample_name
         ppg.assert_uniqueness_of_object(self)
@@ -127,7 +126,11 @@ class Sample:
                 job = ppg.MultiTempFileGeneratingJob(
                     output_filenames, prep_aligner_input
                 )
-                job.depends_on(self.fastq_processor.get_dependecies([str(x) for x in output_filenames]))
+                job.depends_on(
+                    self.fastq_processor.get_dependecies(
+                        [str(x) for x in output_filenames]
+                    )
+                )
             else:
 
                 def prep_aligner_input():
@@ -159,7 +162,9 @@ class Sample:
                 )
 
             job = ppg.TempFileGeneratingJob(output_filenames[0], prep_aligner_input)
-            job.depends_on(self.fastq_processor.get_dependecies(str(output_filenames[0])))
+            job.depends_on(
+                self.fastq_processor.get_dependecies(str(output_filenames[0]))
+            )
 
         job.depends_on(
             deps,
@@ -194,3 +199,24 @@ class Sample:
                 op.close()
 
         return ppg.MultiFileGeneratingJob(output_names, do_store).depends_on(temp_job)
+
+    def align(self, aligner, genome, aligner_parameters):
+        from .lanes import AlignedLane
+
+        output_dir = self.result_dir / "aligned", aligner.name, genome.name
+        output_filename = output_dir / (self.name + ".bam")
+        input_job = self.prepare_input()
+        index_job = genome.build_genome_index(aligner)
+        alignment_job = aligner.alignment_job(
+            input_job.filenames[0],
+            input_job.filenames[1] if self.is_paired else None,
+            index_job.index_path,
+            output_filename,
+            aligner_parameters if aligner_parameters else {},
+        )
+        alignment_job.depends_on(
+            input_job,
+            index_job,
+            ppg.ParameterInvariant(output_filename, aligner_parameters),
+        )
+        return AlignedLane(self.name, alignment_job, genome, self.is_paired, self.vid)
