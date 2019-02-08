@@ -2,18 +2,21 @@ import pytest
 import gzip
 from pathlib import Path
 from pypipegraph import FileGeneratingJob, MultiFileGeneratingJob
+import requests_mock
+import pypipegraph as ppg
 
-from mbf_align.strategies import (
+from mbf_align import (
     FASTQsFromFile,
     FASTQsFromFolder,
     FASTQsFromJob,
+    FASTQsFromURLs,
+    FASTQsFromAccession,
     build_fastq_strategy,
 )
 from mbf_align import Sample
 from mbf_align import PairingError
 from mbf_align import fastq2
 
-import pypipegraph as ppg
 from .shared import data_path
 
 
@@ -481,3 +484,70 @@ class TestSamples:
         assert actual[1] == should_1
         assert actual[2] == "fake_index"
         assert actual[3] == str(params)
+
+    def test_from_url(self):
+        import requests_mock
+
+        with requests_mock.mock() as m:
+            url = "https://www.imt.uni-marburg.de/sample.fastq.gz"
+            m.get(url, text="hello_world")
+            o = FASTQsFromURLs(url)
+            ppg.run_pipegraph()
+            assert len(o.target_files) == 1
+            assert len(o.dependencies) == 2
+            assert Path(o.dependencies[0].filenames[0]).read_text() == "hello_world"
+            assert Path(o.dependencies[0].filenames[1]).read_text() == url
+            assert o() == [(Path(o.dependencies[0].filenames[0]).absolute(),)]
+
+    def test_from_url_paired(self):
+        import requests_mock
+
+        with requests_mock.mock() as m:
+            url1 = "https://www.imt.uni-marburg.de/sample_R1_.fastq.gz"
+            url2 = "https://www.imt.uni-marburg.de/sample_R2_.fastq.gz"
+            m.get(url1, text="hello_world1")
+            m.get(url2, text="hello_world2")
+            o = FASTQsFromURLs([url1, url2])
+            ppg.run_pipegraph()
+            assert len(o.target_files) == 2
+            assert len(o.dependencies) == 3
+            assert Path(o.dependencies[0].filenames[0]).read_text() == "hello_world1"
+            assert "_R1_.fastq.gz" in o.dependencies[0].filenames[0]
+            assert Path(o.dependencies[0].filenames[1]).read_text() == url1
+            assert Path(o.dependencies[1].filenames[0]).read_text() == "hello_world2"
+            assert Path(o.dependencies[1].filenames[1]).read_text() == url2
+            assert o() == [
+                (
+                    Path(o.dependencies[0].filenames[0]).absolute(),
+                    Path(o.dependencies[1].filenames[0]).absolute(),
+                )
+            ]
+
+    def test_from_url_detects_404(self):
+
+        with requests_mock.mock() as m:
+            url = "https://www.imt.uni-marburg.de/sample.fastq.gz"
+            m.get(url, text="hello_world", status_code=404)
+            o = FASTQsFromURLs(url)
+            with pytest.raises(ppg.RuntimeError):
+                ppg.run_pipegraph()
+            assert "Error return" in str(o.dependencies[0].exception)
+            assert url in str(o.dependencies[0].exception)
+
+    def test_fastqs_from_err(self):
+        with requests_mock.mock() as m:
+            m.get(
+                "http://www.ebi.ac.uk/ena/data/warehouse/filereport?accession=ERR2223563&result=read_run&fields=run_accession,fastq_ftp,fastq_md5,fastq_bytes",
+                text="""run_accession	fastq_ftp	fastq_md5	fastq_bytes
+ERR2223563	ftp.sra.ebi.ac.uk/vol1/fastq/ERR222/003/ERR2223563/ERR2223563_1.fastq.gz;ftp.sra.ebi.ac.uk/vol1/fastq/ERR222/003/ERR2223563/ERR2223563_2.fastq.gz	0e29c053bcd31072c8bed9eddece1cec;5d848b65379c195fe158a5d7324b4a18	1170312089;1246298835""",
+            )
+            o = FASTQsFromAccession("ERR2223563")
+            print(o.urls)
+            assert (
+                o.urls[0]
+                == "http://ftp.sra.ebi.ac.uk/vol1/fastq/ERR222/003/ERR2223563/ERR2223563_1.fastq.gz"
+            )
+            assert (
+                o.urls[1]
+                == "http://ftp.sra.ebi.ac.uk/vol1/fastq/ERR222/003/ERR2223563/ERR2223563_2.fastq.gz"
+            )

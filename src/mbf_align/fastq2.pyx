@@ -214,7 +214,7 @@ def CutAdapt(
                 % adapter_sequence_end
             )
     if isinstance(adapter_sequence_begin, int):
-        if adapter_sequence_begin > 0:
+        if adapter_sequence_begin > 0: # pragma: no branch
             raise ValueError(
                 "adapter_sequence_begin needs to be a positive integer, was %s"
                 % adapter_sequence_begin
@@ -241,7 +241,7 @@ def CutAdapt(
         )
         adapter_begin.indel_cost = 50000  # we only want mismatches
     else:
-        if adapter_sequence_begin is None:
+        if adapter_sequence_begin is None: # pragma: no branch
             adapter_sequence_begin = 0
         adapter_begin = None
     if isinstance(adapter_sequence_end, str):

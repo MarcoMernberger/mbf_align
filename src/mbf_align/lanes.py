@@ -27,7 +27,7 @@ class AlignedSample:
         bam_name = alignment_job.filenames[0]
         if isinstance(alignment_job, ppg.MultiFileGeneratingJob):
             index_fn = alignment_job.filenames[1]
-            if index_fn != bam_name + ".bai": # pragma: no cover
+            if index_fn != bam_name + ".bai":  # pragma: no cover
                 raise ValueError(
                     "MultiFileGeneratingJob as alignment_job "
                     "had not .bam and .bam.bai as first two filenames"
@@ -51,6 +51,8 @@ class AlignedSample:
                     index_fn, self._index(alignment_job.job_id, index_fn)
                 )
                 index_job.depends_on(alignment_job)
+        else:
+            raise NotImplementedError("Should not happe / covered by earlier if")
 
         self.alignment_job = alignment_job
         self.index_job = index_job
@@ -73,9 +75,12 @@ class AlignedSample:
 
     def get_bam(self):
         import multiprocessing
-        return pysam.Samfile(self.bam_filename, 
-                             index_filename=self.index_filename,
-                             threads=multiprocessing.cpu_count())
+
+        return pysam.Samfile(
+            self.bam_filename,
+            index_filename=self.index_filename,
+            threads=multiprocessing.cpu_count(),
+        )
 
     def get_unique_aligned_bam(self):
         """Deprecated compability with older pipeline"""
