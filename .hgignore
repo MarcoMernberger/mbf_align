@@ -1,3 +1,4 @@
+syntax:glob
 # Temporary and binary files
 *~
 *.py[cod]

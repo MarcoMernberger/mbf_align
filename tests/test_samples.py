@@ -46,6 +46,9 @@ def test_FASTQsFromFilePairedMissingR2():
 def test_FASTQsFromFolder():
     folder = data_path / "sample_a"
     o = FASTQsFromFolder(folder)
+    import pprint
+
+    pprint.pprint(o())
     assert o() == [
         ((folder / "a.fastq").resolve(),),
         ((folder / "b.fastq.gz").resolve(),),
@@ -410,3 +413,71 @@ class TestSamples:
         with gzip.GzipFile(real_job.filenames[0], "r") as op:
             lines = op.readlines()
         assert len(lines) == 4
+
+    def test_align(self, local_store):
+        import json
+        import gzip
+
+        class FakeGenome:
+            name = "FakeGenome"
+
+            def build_index(self, aligner, fasta_to_use=None, gtf_to_use=None):
+                return ppg.FileGeneratingJob(
+                    "fake_index", lambda: Path("fake_index").write_text("hello")
+                )
+
+        class FakeAligner:
+            name = "FakeAligner"
+
+            def align_job(
+                self,
+                input_fastq,
+                paired_end_filename,
+                index_basename,
+                output_bam_filename,
+                parameters,
+            ):
+                def align():
+                    with open(output_bam_filename, "w") as op:
+                        json.dump(
+                            [
+                                open(input_fastq).read(200),
+                                open(paired_end_filename).read(200)
+                                if paired_end_filename
+                                else "",
+                                index_basename,
+                                str(parameters),
+                            ],
+                            op,
+                        )
+                    with open(str(output_bam_filename) + ".bai", "w") as op:
+                        op.write("Done")
+
+                return ppg.MultiFileGeneratingJob(
+                    [output_bam_filename, str(output_bam_filename) + ".bai"], align
+                )
+
+        aligner = FakeAligner()
+        lane = Sample(
+            "Sample_a", data_path / "sample_b", False, vid="VA000", pairing="paired"
+        )
+        genome = FakeGenome()
+        params = {"shu": 123}
+        aligned_lane = lane.align(aligner, genome, params)
+        ppg.run_pipegraph()
+        assert Path("fake_index").exists()
+        assert Path("fake_index").read_text() == "hello"
+        assert aligned_lane.load()[0].filenames[0].endswith(lane.name + ".bam")
+        assert aligned_lane.load()[0].filenames[1].endswith(lane.name + ".bam.bai")
+        assert Path(aligned_lane.load()[0].filenames[0]).exists()
+        with open(aligned_lane.load()[0].filenames[0]) as op:
+            actual = json.load(op)
+        with gzip.GzipFile(data_path / "sample_b" / "a_R1_.fastq.gz") as op:
+            should_0 = op.read(200).decode("utf-8")
+        with gzip.GzipFile(data_path / "sample_b" / "a_R2_.fastq.gz") as op:
+            should_1 = op.read(200).decode("utf-8")
+
+        assert actual[0] == should_0
+        assert actual[1] == should_1
+        assert actual[2] == "fake_index"
+        assert actual[3] == str(params)

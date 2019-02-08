@@ -110,7 +110,7 @@ class FASTQsFromFolder(_FASTQsBase):
         forward = sorted([x for x in fastqs if "_R1_" in x.name])
         reverse = sorted([x for x in fastqs if "_R2_" in x.name])
         if not forward and not reverse and fastqs:  # no R1 or R2, but fastqs present
-            return list(zip(fastqs))
+            return sorted(zip(fastqs))
         else:
             return self._combine_r1_r2(forward, reverse)
 

@@ -201,16 +201,17 @@ class Sample:
         return ppg.MultiFileGeneratingJob(output_names, do_store).depends_on(temp_job)
 
     def align(self, aligner, genome, aligner_parameters):
-        from .lanes import AlignedLane
+        from .lanes import AlignedSample
 
-        output_dir = self.result_dir / "aligned", aligner.name, genome.name
+        output_dir = self.result_dir / "aligned" / aligner.name / genome.name
+        output_dir.mkdir(parents=True, exist_ok=True)
         output_filename = output_dir / (self.name + ".bam")
         input_job = self.prepare_input()
-        index_job = genome.build_genome_index(aligner)
-        alignment_job = aligner.alignment_job(
+        index_job = genome.build_index(aligner)
+        alignment_job = aligner.align_job(
             input_job.filenames[0],
             input_job.filenames[1] if self.is_paired else None,
-            index_job.index_path,
+            index_job.job_id,
             output_filename,
             aligner_parameters if aligner_parameters else {},
         )
@@ -219,4 +220,5 @@ class Sample:
             index_job,
             ppg.ParameterInvariant(output_filename, aligner_parameters),
         )
-        return AlignedLane(self.name, alignment_job, genome, self.is_paired, self.vid)
+        print(input_job)
+        return AlignedSample(self.name, alignment_job, genome, self.is_paired, self.vid)
