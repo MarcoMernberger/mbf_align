@@ -27,11 +27,13 @@ i = 1
 while True:
     rebuild = False
     if not known_files or i % 10 == 0:
-        known_files = list(itertools.chain(
-            pathlib.Path("./src").glob("**/*.py"),
-            pathlib.Path("./src").glob("**/*.pyx"),
-            pathlib.Path("./tests").glob("**/*.py"),
-        ))
+        known_files = list(
+            itertools.chain(
+                pathlib.Path("./src").glob("**/*.py"),
+                pathlib.Path("./src").glob("**/*.pyx"),
+                pathlib.Path("./tests").glob("**/*.py"),
+            )
+        )
     i += 1
     for fn in known_files:
         fn = str(fn)

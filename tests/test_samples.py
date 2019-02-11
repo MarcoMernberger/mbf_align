@@ -425,9 +425,11 @@ class TestSamples:
             name = "FakeGenome"
 
             def build_index(self, aligner, fasta_to_use=None, gtf_to_use=None):
-                return ppg.FileGeneratingJob(
+                job = ppg.FileGeneratingJob(
                     "fake_index", lambda: Path("fake_index").write_text("hello")
                 )
+                job.output_path = "fake_index"
+                return job
 
         class FakeAligner:
             name = "FakeAligner"
@@ -456,9 +458,11 @@ class TestSamples:
                     with open(str(output_bam_filename) + ".bai", "w") as op:
                         op.write("Done")
 
-                return ppg.MultiFileGeneratingJob(
+                job = ppg.MultiFileGeneratingJob(
                     [output_bam_filename, str(output_bam_filename) + ".bai"], align
                 )
+                job.depends_on_params("")
+                return job
 
         aligner = FakeAligner()
         lane = Sample(

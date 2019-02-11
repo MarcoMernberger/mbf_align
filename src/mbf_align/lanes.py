@@ -17,6 +17,8 @@ class AlignedSample:
             Where does the BAM come from?
             str and Path get's converted into a FileInvariant
         """
+
+        print("name2", name)
         if isinstance(alignment_job, (str, Path)):
             alignment_job = ppg.FileInvariant(alignment_job)
         if not isinstance(alignment_job, (ppg.FileInvariant, ppg.FileGeneratingJob)):
@@ -24,31 +26,55 @@ class AlignedSample:
                 "alignment_job must be a ppg.FileGeneratingJob or FileChecksumInvariant"
                 "was %s" % (type(alignment_job))
             )
-        bam_name = alignment_job.filenames[0]
+        bam_name = None
+        bai_name = None
+        for fn in alignment_job.filenames:
+            if str(fn).endswith(".bam"):
+                if bam_name is None:
+                    bam_name = str(fn)
+                else:
+                    raise ValueError(
+                        "Job passed to AlignedSample had multiple .bam filenames"
+                    )
+            elif str(fn).endswith(".bai"):
+                if bai_name is None:
+                    bai_name = str(fn)
+                else:
+                    raise ValueError(
+                        "Job passed to AlignedSample had multiple .bai filenames"
+                    )
+
+        if bam_name is None:
+            raise ValueError("Job passed to AlignedSample had no .bam filenames")
+        if not str(bam_name).endswith(".bam"):
+            raise ValueError("%s does not end in .bam" % index_fn)
+
         if isinstance(alignment_job, ppg.MultiFileGeneratingJob):
-            index_fn = alignment_job.filenames[1]
-            if index_fn != bam_name + ".bai":  # pragma: no cover
-                raise ValueError(
-                    "MultiFileGeneratingJob as alignment_job "
-                    "had not .bam and .bam.bai as first two filenames"
+            if bai_name is None:
+                index_fn = bam_name + ".bai"
+                index_job = ppg.FileGeneratingJob(
+                    index_fn, self._index(bam_name, index_fn)
                 )
-            index_job = alignment_job
+                index_job.depends_on(alignment_job)
+
+            else:
+                index_fn = bai_name
+                index_job = alignment_job
+
         elif isinstance(alignment_job, ppg.FileGeneratingJob):
-            index_fn = alignment_job.job_id + ".bai"
-            index_job = ppg.FileGeneratingJob(
-                index_fn, self._index(alignment_job.job_id, index_fn)
-            )
+            index_fn = bam_name + ".bai"
+            index_job = ppg.FileGeneratingJob(index_fn, self._index(bam_name, index_fn))
             index_job.depends_on(alignment_job)
         elif isinstance(alignment_job, ppg.FileInvariant):
-            index_fn = alignment_job.job_id + ".bai"
+            index_fn = bam_name + ".bai"
             if Path(index_fn).exists():
                 index_job = ppg.FileInvariant(index_fn)
             else:
                 cache_dir = Path(ppg.util.global_pipegraph.cache_folder) / "bam_indices"
                 cache_dir.mkdir(exist_ok=True)
-                index_fn = cache_dir / (Path(alignment_job.job_id).name + ".bai")
+                index_fn = cache_dir / (Path(bam_name).name + ".bai")
                 index_job = ppg.FileGeneratingJob(
-                    index_fn, self._index(alignment_job.job_id, index_fn)
+                    index_fn, self._index(bam_name, index_fn)
                 )
                 index_job.depends_on(alignment_job)
         else:
@@ -69,6 +95,8 @@ class AlignedSample:
 
     def _index(self, input_fn, output_fn):
         def do_index():
+            print(str(input_fn), Path(input_fn).exists())
+            print(str(output_fn), Path(output_fn).exists())
             pysam.index(str(input_fn), str(output_fn))
 
         return do_index

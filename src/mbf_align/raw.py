@@ -211,14 +211,22 @@ class Sample:
         alignment_job = aligner.align_job(
             input_job.filenames[0],
             input_job.filenames[1] if self.is_paired else None,
-            index_job.job_id,
+            index_job.output_path,
             output_filename,
             aligner_parameters if aligner_parameters else {},
         )
         alignment_job.depends_on(
             input_job,
             index_job,
-            ppg.ParameterInvariant(output_filename, aligner_parameters),
+            # ppg.ParameterInvariant(output_filename, aligner_parameters), # that's the aligner's job.
         )
-        print(input_job)
+        for j in alignment_job.prerequisites:
+            if isinstance(j, ppg.ParameterInvariant):
+                break
+        else:
+            raise ppg.JobContractError(
+                "aligner (%s).align_job should have added a parameter invariant for aligner parameters"
+                % aligner
+            )
+        print("name raw", self.name)
         return AlignedSample(self.name, alignment_job, genome, self.is_paired, self.vid)

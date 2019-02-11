@@ -64,6 +64,8 @@ class TestAligned:
         def gen():
             shutil.copy(Path(data_path) / "ex2.bam", "sample.bam")
 
+        ppg.util.global_pipegraph.quiet = False
+
         job = ppg.FileGeneratingJob("sample.bam", gen)
         genome = object()
         lane = mbf_align.AlignedSample("test_lane", job, genome, False, "AA123")
