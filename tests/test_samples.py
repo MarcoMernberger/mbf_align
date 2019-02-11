@@ -489,6 +489,46 @@ class TestSamples:
         assert actual[2] == "fake_index"
         assert actual[3] == str(params)
 
+    def test_align_parameterDependencyChecking(self, local_store):
+        import json
+        import gzip
+
+        class FakeGenome:
+            name = "FakeGenome"
+
+            def build_index(self, aligner, fasta_to_use=None, gtf_to_use=None):
+                job = ppg.FileGeneratingJob(
+                    "fake_index", lambda: Path("fake_index").write_text("hello")
+                )
+                job.output_path = "fake_index"
+                return job
+
+        class FakeAligner:
+            name = "FakeAligner"
+
+            def align_job(
+                self,
+                input_fastq,
+                paired_end_filename,
+                index_basename,
+                output_bam_filename,
+                parameters,
+            ):
+                job = ppg.MultiFileGeneratingJob(
+                    [output_bam_filename, str(output_bam_filename) + ".bai"], lambda: 5
+                )
+                # job.depends_on_params("") # that's the line we check
+                return job
+
+        aligner = FakeAligner()
+        lane = Sample(
+            "Sample_a", data_path / "sample_b", False, vid="VA000", pairing="paired"
+        )
+        genome = FakeGenome()
+        params = {"shu": 123}
+        with pytest.raises(ppg.JobContractError):
+            lane.align(aligner, genome, params)
+
     def test_from_url(self):
         import requests_mock
 

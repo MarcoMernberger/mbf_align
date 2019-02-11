@@ -46,8 +46,6 @@ class AlignedSample:
 
         if bam_name is None:
             raise ValueError("Job passed to AlignedSample had no .bam filenames")
-        if not str(bam_name).endswith(".bam"):
-            raise ValueError("%s does not end in .bam" % index_fn)
 
         if isinstance(alignment_job, ppg.MultiFileGeneratingJob):
             if bai_name is None:
