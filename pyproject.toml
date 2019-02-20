@@ -1,2 +1,2 @@
-[build - system]
+[build-system]
 requires = ["setuptools>=38.3", "wheel", "cython"]
