@@ -197,7 +197,7 @@ class FASTQsFromURLs(_FASTQsBase):
         return result
 
 
-def FASTQsFromAccession(accession):  # pragma: no cover - for now 
+def FASTQsFromAccession(accession):  # pragma: no cover - for now
     if accession.startswith("GSM"):
         raise NotImplementedError()
     # elif accession.startswith("GSE"):#  multilpe

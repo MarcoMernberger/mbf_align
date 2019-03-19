@@ -490,8 +490,6 @@ class TestSamples:
         assert actual[3] == str(params)
 
     def test_align_parameterDependencyChecking(self, local_store):
-        import json
-        import gzip
 
         class FakeGenome:
             name = "FakeGenome"
