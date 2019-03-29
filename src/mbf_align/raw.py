@@ -203,7 +203,12 @@ class Sample:
     def align(self, aligner, genome, aligner_parameters):
         from .lanes import AlignedSample
 
-        output_dir = self.result_dir / "aligned" / aligner.name / genome.name
+        output_dir = (
+            Path("results")
+            / "aligned"
+            / ("%s_%s" % (aligner.name, aligner.version))
+            / genome.name
+        )
         output_dir.mkdir(parents=True, exist_ok=True)
         output_filename = output_dir / (self.name + ".bam")
         input_job = self.prepare_input()
@@ -229,4 +234,6 @@ class Sample:
                 % aligner
             )
         print("name raw", self.name)
-        return AlignedSample(self.name, alignment_job, genome, self.is_paired, self.vid)
+        return AlignedSample(
+            self.name, alignment_job, genome, self.is_paired, self.vid, output_dir
+        )

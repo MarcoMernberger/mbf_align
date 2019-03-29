@@ -5,6 +5,7 @@ import pypipegraph as ppg
 from .shared import data_path
 import mbf_align
 import pysam
+from mbf_qualitycontrol.testing import assert_image_equal
 
 
 @pytest.mark.usefixtures("new_pipegraph")
@@ -107,3 +108,18 @@ class TestAligned:
         ppg.run_pipegraph()
         assert Path("sample.bam").exists()
         assert Path("sample.bam.bai").exists()
+
+
+@pytest.mark.usefixtures("new_pipegraph")
+class TestQualityControl:
+    def test_complexity(self):
+        from mbf_qualitycontrol import do_qc
+
+        genome = object()
+        lane = mbf_align.AlignedSample(
+            "test_lane", Path(data_path) / "rnaseq_spliced.bam", genome, False, "AA123"
+        )
+        do_qc()
+        ppg.run_pipegraph()
+        p = lane.result_dir / "complexity.png"
+        assert_image_equal(p)

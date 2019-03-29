@@ -433,6 +433,7 @@ class TestSamples:
 
         class FakeAligner:
             name = "FakeAligner"
+            version = "0.1"
 
             def align_job(
                 self,
@@ -490,7 +491,6 @@ class TestSamples:
         assert actual[3] == str(params)
 
     def test_align_parameterDependencyChecking(self, local_store):
-
         class FakeGenome:
             name = "FakeGenome"
 
@@ -503,6 +503,7 @@ class TestSamples:
 
         class FakeAligner:
             name = "FakeAligner"
+            version = "0.1"
 
             def align_job(
                 self,
