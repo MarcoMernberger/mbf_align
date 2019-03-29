@@ -208,6 +208,7 @@ class Sample:
             / "aligned"
             / ("%s_%s" % (aligner.name, aligner.version))
             / genome.name
+            / self.name
         )
         output_dir.mkdir(parents=True, exist_ok=True)
         output_filename = output_dir / (self.name + ".bam")

@@ -107,9 +107,7 @@ class AlignedSample:
 
     def _index(self, input_fn, output_fn):
         def do_index():
-            print(str(input_fn), Path(input_fn).exists())
-            print(str(output_fn), Path(output_fn).exists())
-            pysam.index(str(input_fn), str(output_fn))
+            pysam.index(str(Path(input_fn).absolute()), str(Path(output_fn).absolute()))
 
         return do_index
 
