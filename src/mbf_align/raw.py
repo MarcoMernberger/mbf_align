@@ -118,13 +118,13 @@ class Sample:
 
                 def prep_aligner_input():
                     self.fastq_processor.generate_aligner_input_paired(
-                        output_filenames[0] + '.temp',
-                        output_filenames[1] + '.temp',
+                        str(output_filenames[0]) + '.temp',
+                        str(output_filenames[1]) + '.temp',
                         input_filenames,
                         self.reverse_reads,
                     )
-                    shutil.move(output_filenames[0] + ".temp", output_filenames[0])
-                    shutil.move(output_filenames[1] + ".temp", output_filenames[1])
+                    shutil.move(str(output_filenames[0]) + ".temp", output_filenames[0])
+                    shutil.move(str(output_filenames[1]) + ".temp", output_filenames[1])
 
                 job = ppg.MultiTempFileGeneratingJob(
                     output_filenames, prep_aligner_input
@@ -138,17 +138,17 @@ class Sample:
 
                 def prep_aligner_input():
                     self.fastq_processor.generate_aligner_input(
-                        output_filenames[0] + '.temp',
+                        str(output_filenames[0]) + '.temp',
                         [x[0] for x in input_filenames],
                         self.reverse_reads,
                     )
                     self.fastq_processor.generate_aligner_input(
-                        output_filenames[1] + '.temp',
+                        str(output_filenames[1]) + '.temp',
                         [x[1] for x in input_filenames],
                         self.reverse_reads,
                     )
-                shutil.move(output_filenames[0] + ".temp", output_filenames[0])
-                shutil.move(output_filenames[1] + ".temp", output_filenames[1])
+                    shutil.move(str(output_filenames[0]) + ".temp", output_filenames[0])
+                    shutil.move(str(output_filenames[1]) + ".temp", output_filenames[1])
 
                 job = ppg.MultiTempFileGeneratingJob(
                     output_filenames, prep_aligner_input
@@ -163,9 +163,9 @@ class Sample:
 
             def prep_aligner_input(output_filename):
                 self.fastq_processor.generate_aligner_input(
-                    output_filename + '.temp', input_filenames, self.reverse_reads
+                    str(output_filename) + '.temp', input_filenames, self.reverse_reads
                 )
-                shutil.move(output_filename + ".temp", output_filename)
+                shutil.move(str(output_filename) + ".temp", output_filename)
 
             job = ppg.TempFileGeneratingJob(output_filenames[0], prep_aligner_input)
             job.depends_on(

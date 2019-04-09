@@ -572,6 +572,7 @@ class TestSamples:
             url = "https://www.imt.uni-marburg.de/sample.fastq.gz"
             m.get(url, text="hello_world", status_code=404)
             o = FASTQsFromURLs(url)
+            o.download_files()
             with pytest.raises(ppg.RuntimeError):
                 ppg.run_pipegraph()
             assert "Error return" in str(o.dependencies[0].exception)

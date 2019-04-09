@@ -7,8 +7,9 @@ from pathlib import Path
 import pandas as pd
 from dppd import dppd
 import dppd_plotnine  # noqa:F401 -
+from mbf_qualitycontrol import register_qc, QCCallback
 
-dppd, X = dppd()
+dp, X = dppd()
 
 
 class AlignedSample:
@@ -23,11 +24,11 @@ class AlignedSample:
             str and Path get's converted into a FileInvariant
         """
 
+        self.name = name
+        ppg.util.assert_uniqueness_of_object(self)
         self.alignment_job, self.index_job, bam_name, index_fn = self._parse_alignment_job_input(
             alignment_job
         )
-        self.name = name
-        ppg.util.assert_uniqueness_of_object(self)
         self.result_dir = (
             Path(result_dir)
             if result_dir
@@ -61,7 +62,8 @@ class AlignedSample:
                     )
             elif str(fn).endswith(".bai"):
                 if bai_name is None:
-                    bai_name = str(fn)
+                    index_fn = str(fn)
+                    bai_name = index_fn
                 else:
                     raise ValueError(
                         "Job passed to AlignedSample had multiple .bai filenames"
@@ -93,14 +95,14 @@ class AlignedSample:
             else:
                 cache_dir = Path(ppg.util.global_pipegraph.cache_folder) / "bam_indices"
                 cache_dir.mkdir(exist_ok=True)
-                index_fn = cache_dir / (Path(bam_name).name + ".bai")
+                index_fn = cache_dir / (self.name + "_" + Path(bam_name).name + ".bai")
                 index_job = ppg.FileGeneratingJob(
                     index_fn, self._index(bam_name, index_fn)
                 )
                 index_job.depends_on(alignment_job)
         else:
             raise NotImplementedError("Should not happe / covered by earlier if")
-        return alignment_job, index_job, bam_name, index_fn
+        return alignment_job, index_job, Path(bam_name), Path(index_fn)
 
     def load(self):
         return self.alignment_job, self.index_job
@@ -116,9 +118,13 @@ class AlignedSample:
 
         return pysam.Samfile(
             self.bam_filename,
-            index_filename=self.index_filename,
+            index_filename=str(self.index_filename),
             threads=multiprocessing.cpu_count(),
         )
+
+    def get_bam_names(self):
+        """Retrieve the bam filename and index name as strings"""
+        return (str(self.bam_filename), str(self.index_filename))
 
     def get_unique_aligned_bam(self):
         """Deprecated compability with older pipeline"""
@@ -143,9 +149,9 @@ class AlignedSample:
 
     def register_qc(self):
         self.register_qc_complexity()
+        self.register_qc_gene_strandedness()
 
     def register_qc_complexity(self):
-        from mbf_qualitycontrol import register_qc, QCCallback
 
         output_filename = self.result_dir / "complexity.png"
 
@@ -154,8 +160,8 @@ class AlignedSample:
                 import mbf_bam
 
                 counts = mbf_bam.calculate_duplicate_distribution(
-                    self.bam_filename
-                )  # , self.index_filename
+                    str(self.bam_filename), str(self.index_filename)
+                )
                 return pd.DataFrame(
                     {
                         "source": self.name,
@@ -167,25 +173,95 @@ class AlignedSample:
             def plot(df):
                 unique_count = df["Count"].sum()
                 total_count = (df["Count"] * df["Repetition count"]).sum()
-                severity = "severe"
                 pcb = float(unique_count) / total_count
-                if pcb >= 0.9:
+                if pcb >= 0.9:  # pragma: no cover
                     severity = "none"
-                elif pcb >= 0.8:
+                elif pcb >= 0.8:  # pragma: no cover
                     severity = "mild"
-                elif pcb >= 0.5:
+                elif pcb >= 0.5:  # pragma: no cover
                     severity = "moderate"
+                else:
+                    severity = "severe"
                 title = (
                     "Genomic positions with repetition count reads\nTotal read count: %i\nPCR Bottleneck coefficient: %.2f (%s)"
                     % (total_count, pcb, severity)
                 )
                 return (
-                    dppd(df)
+                    dp(df)
                     .p9()
                     .add_point("Repetition count", "Count")
                     .add_line("Repetition count", "Count")
                     .scale_y_continuous(trans="log2")
                     .title(title)
+                    .pd
+                )
+
+            return ppg.PlotJob(output_filename, calc, plot).depends_on(self.load)
+
+        register_qc(output_filename, QCCallback(build))
+        return output_filename
+
+    def register_qc_gene_strandedness(self):
+        output_filename = self.result_dir / "strandedness.png"
+
+        def build():
+            def calc():
+                from mbf_genomics.genes.anno_tag_counts import (
+                    IntervalStrategyExonIntronClassification,
+                    IntervalStrategyGene,
+                )
+                from mbf_bam import count_reads_stranded
+
+                interval_strategy = IntervalStrategyExonIntronClassification()
+                intervals = interval_strategy._get_interval_tuples_by_chr(self.genome)
+
+                bam_filename, bam_index_name = self.get_bam_names()
+                forward, reverse = count_reads_stranded(
+                    bam_filename,
+                    bam_index_name,
+                    intervals,
+                    IntervalStrategyGene()._get_interval_tuples_by_chr(self.genome),
+                    each_read_counts_once=True,
+                )
+                result = {"what": [], "count": [], "sample": self.name}
+                for k in forward.keys() | reverse.keys():
+                    if k.endswith("_undecidable"):
+                        result["what"].append(k)
+                        result["count"].append(forward.get(k, 0) + reverse.get(k, 0))
+                    elif not k.startswith("_"):
+                        result["what"].append(k + "_correct")
+                        result["count"].append(forward.get(k, 0))
+                        result["what"].append(k + "_reversed")
+                        result["count"].append(reverse.get(k, 0))
+                    elif k == "_outside":
+                        result["what"].append("outside")
+                        result["count"].append(forward.get(k, 0))
+
+                return pd.DataFrame(result)
+
+            def plot(df):
+                return (
+                    dp(df)
+                    .mutate(
+                        what=pd.Categorical(
+                            df["what"],
+                            [
+                                "exon_correct",
+                                "exon_reversed",
+                                "exon_undecidable",
+                                "intron_correct",
+                                "intron_reversed",
+                                "intron_undecidable",
+                                "both_correct",
+                                "both_reversed",
+                                "both_undecidable",
+                                "outside",
+                            ],
+                        )
+                    )
+                    .p9()
+                    .add_bar("sample", "count", fill="what", position="dodge")
+                    .turn_x_axis_labels()
                     .pd
                 )
 

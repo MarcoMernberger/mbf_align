@@ -5,6 +5,7 @@ import pypipegraph as ppg
 from .shared import data_path
 import mbf_align
 import pysam
+import pandas as pd
 from mbf_qualitycontrol.testing import assert_image_equal
 
 
@@ -110,16 +111,31 @@ class TestAligned:
         assert Path("sample.bam.bai").exists()
 
 
+def get_human_22_fake_genome():
+    from mbf_genomics.testing import MockGenome
+    import gzip
+
+    genes = pd.read_msgpack(gzip.GzipFile(Path(data_path) / "hs_22_genes.msgpack.gz")).reset_index()
+    tr = pd.read_msgpack(gzip.GzipFile(Path(data_path) / "hs_22_transcripts.msgpack.gz")).reset_index()
+    return MockGenome(df_genes=genes, df_transcripts=tr, chr_lengths={"22": 50818468})
+
+
 @pytest.mark.usefixtures("new_pipegraph")
 class TestQualityControl:
-    def test_complexity(self):
+    def test_qc_plots(self, new_pipegraph):
+        new_pipegraph.new_pipegraph(quiet=False)
         from mbf_qualitycontrol import do_qc
 
-        genome = object()
+        # straight from chr22 of the human genome
+        genome = get_human_22_fake_genome()
+
         lane = mbf_align.AlignedSample(
-            "test_lane", Path(data_path) / "rnaseq_spliced.bam", genome, False, "AA123"
-        )
+            "test_lane", Path(data_path) / "rnaseq_spliced_chr22.bam", genome, False, "AA123"
+        )  # index creation is automatic
+        assert "bam_indices" in lane.index_job.job_id
         do_qc()
         ppg.run_pipegraph()
         p = lane.result_dir / "complexity.png"
-        assert_image_equal(p)
+        assert_image_equal(p, suffix='_complexity')
+        p = lane.result_dir / "strandedness.png"
+        assert_image_equal(p, suffix="_strandedness")
