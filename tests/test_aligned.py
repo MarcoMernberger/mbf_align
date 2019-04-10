@@ -111,24 +111,12 @@ class TestAligned:
         assert Path("sample.bam.bai").exists()
 
 
-def get_human_22_fake_genome():
-    from mbf_genomics.testing import MockGenome
-    import gzip
-
-    genes = pd.read_msgpack(
-        gzip.GzipFile(get_sample_data(Path("mbf_align/hs_22_genes.msgpack.gz")))
-    ).reset_index()
-    tr = pd.read_msgpack(
-        gzip.GzipFile(get_sample_data(Path("mbf_align/hs_22_transcripts.msgpack.gz")))
-    ).reset_index()
-    return MockGenome(df_genes=genes, df_transcripts=tr, chr_lengths={"22": 50818468})
-
-
 @pytest.mark.usefixtures("new_pipegraph")
 class TestQualityControl:
     def test_qc_plots(self, new_pipegraph):
         new_pipegraph.new_pipegraph(quiet=False)
         from mbf_qualitycontrol import do_qc
+        from mbf_sampledata import get_human_22_fake_genome
 
         # straight from chr22 of the human genome
         genome = get_human_22_fake_genome()
@@ -147,3 +135,6 @@ class TestQualityControl:
         assert_image_equal(p, suffix="_complexity")
         p = lane.result_dir / "strandedness.png"
         assert_image_equal(p, suffix="_strandedness")
+        p = lane.result_dir / f"{genome.name}_reads_per_biotype.png"
+        assert_image_equal(p, suffix="_biotypes")
+

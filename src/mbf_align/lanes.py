@@ -150,6 +150,7 @@ class AlignedSample:
     def register_qc(self):
         self.register_qc_complexity()
         self.register_qc_gene_strandedness()
+        self.register_qc_biotypes()
 
     def register_qc_complexity(self):
 
@@ -189,6 +190,7 @@ class AlignedSample:
                 return (
                     dp(df)
                     .p9()
+                    .theme_bw()
                     .add_point("Repetition count", "Count")
                     .add_line("Repetition count", "Count")
                     .scale_y_continuous(trans="log2")
@@ -269,6 +271,41 @@ class AlignedSample:
 
         register_qc(output_filename, QCCallback(build))
         return output_filename
+
+    def register_qc_biotypes(self):
+        output_filename = self.result_dir / f"{self.genome.name}_reads_per_biotype.png"
+  
+        def build():
+            from mbf_genomics.genes import Genes
+            from mbf_genomics.genes.anno_tag_counts import GeneUnstranded
+            genes = Genes(self.genome)
+            anno = GeneUnstranded(self)
+            def plot(output_filename):
+                return (
+                    dp(genes.df)
+                    .groupby("biotype")
+                    .summarize((anno.columns[0], lambda x: x.sum(), "read count"))
+                    .mutate(sample=self.name)
+                    .p9()
+                    .theme_bw()
+                    .annotation_stripes()
+                    .add_bar("biotype", "read count", stat="identity")
+                    # .turn_x_axis_labels()
+                    .coord_flip()
+                    .title(self.name)
+                    .render(
+                        output_filename,
+                        width=6,
+                        height=2 + len(genes.df.biotype.unique()) * 0.25,
+                    )
+                )
+
+            return ppg.FileGeneratingJob(output_filename, plot).depends_on(
+                genes.add_annotator(anno)
+            )
+        register_qc(output_filename, QCCallback(build))
+
+
 
 
 __all__ = [Sample, AlignedSample]
