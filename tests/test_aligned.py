@@ -137,4 +137,7 @@ class TestQualityControl:
         assert_image_equal(p, suffix="_strandedness")
         p = lane.result_dir / f"{genome.name}_reads_per_biotype.png"
         assert_image_equal(p, suffix="_biotypes")
-
+        p = lane.result_dir / ".." / "alignment_statistics.png"
+        assert_image_equal(p, suffix="_alignment_statistics")
+        p = lane.result_dir / f"subchromosomal_distribution.png"
+        assert_image_equal(p, suffix="_subchromosomal_distribution")

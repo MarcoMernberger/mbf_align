@@ -7,13 +7,15 @@ from pathlib import Path
 import pandas as pd
 from dppd import dppd
 import dppd_plotnine  # noqa:F401 -
-from mbf_qualitycontrol import register_qc, QCCallback
+from mbf_qualitycontrol import register_qc, QCCallback, get_qc
 
 dp, X = dppd()
 
 
 class AlignedSample:
-    def __init__(self, name, alignment_job, genome, is_paired, vid, result_dir=None):
+    def __init__(
+        self, name, alignment_job, genome, is_paired, vid, result_dir=None, aligner=None
+    ):
         """
         Create an aligned sample from a BAM producing job.
         See Sample.align()
@@ -40,7 +42,11 @@ class AlignedSample:
         self.vid = vid
         self.bam_filename = bam_name
         self.index_filename = index_fn
+        self.aligner = aligner
         self.register_qc()
+
+    def __hash__(self):
+        return hash(self.__class__.__name__ + self.name)
 
     def _parse_alignment_job_input(self, alignment_job):
         if isinstance(alignment_job, (str, Path)):
@@ -147,10 +153,19 @@ class AlignedSample:
         """How many unmapped entrys are in the bam?"""
         return self._parse_idxstat()[1]
 
+    def get_alignment_stats(self):
+        if self.aligner is not None and hasattr(self.aligner, "get_alignment_stats"):
+            return self.aligner.get_alignment_stats(Path(self.bam_filename))
+        else:
+            with self.get_bam() as f:
+                return {"Mapped": f.mapped, "Unmapped": f.unmapped}
+
     def register_qc(self):
         self.register_qc_complexity()
         self.register_qc_gene_strandedness()
         self.register_qc_biotypes()
+        self.register_qc_alignment_stats()
+        self.register_qc_subchromosomal()
 
     def register_qc_complexity(self):
 
@@ -274,12 +289,14 @@ class AlignedSample:
 
     def register_qc_biotypes(self):
         output_filename = self.result_dir / f"{self.genome.name}_reads_per_biotype.png"
-  
+
         def build():
             from mbf_genomics.genes import Genes
             from mbf_genomics.genes.anno_tag_counts import GeneUnstranded
+
             genes = Genes(self.genome)
             anno = GeneUnstranded(self)
+
             def plot(output_filename):
                 return (
                     dp(genes.df)
@@ -303,9 +320,107 @@ class AlignedSample:
             return ppg.FileGeneratingJob(output_filename, plot).depends_on(
                 genes.add_annotator(anno)
             )
+
         register_qc(output_filename, QCCallback(build))
 
+    def register_qc_alignment_stats(self):
+        output_filename = self.result_dir / ".." / "alignment_statistics.png"
+        try:
+            q = get_qc(output_filename)
+        except KeyError:
 
+            class AlignmentStatQC:
+                def __init__(self):
+                    self.lanes = set()
+
+                def get_qc_job(self):
+                    def calc():
+                        parts = []
+                        for l in self.lanes:
+                            p = l.get_alignment_stats()
+                            parts.append(
+                                pd.DataFrame(
+                                    {
+                                        "what": list(p.keys()),
+                                        "count": list(p.values()),
+                                        "sample": l.name,
+                                    }
+                                )
+                            )
+                        return pd.concat(parts)
+
+                    def plot(df):
+                        return (
+                            dp(df)
+                            .p9()
+                            .theme_bw()
+                            .annotation_stripes()
+                            .add_bar(
+                                "sample",
+                                "count",
+                                fill="what",
+                                position="stack",
+                                stat="identity",
+                            )
+                        )
+
+                    return ppg.PlotJob(output_filename, calc, plot).depends_on(
+                        [x.load() for x in self.lanes]
+                    )
+
+            q = AlignmentStatQC()
+            register_qc(output_filename, q)
+        q.lanes.add(self)
+
+    def register_qc_subchromosomal(self):
+        """Subchromosom distribution plot - good to detect amplified regions
+        or ancient virus awakening"""
+        output_filename = self.result_dir / "subchromosomal_distribution.png"
+
+        def build():
+            def calc():
+                from mbf_genomics.genes.anno_tag_counts import IntervalStrategyWindows
+                from mbf_bam import count_reads_unstranded
+
+                interval_strategy = IntervalStrategyWindows(250_000)
+                intervals = interval_strategy._get_interval_tuples_by_chr(self.genome)
+
+                bam_filename, bam_index_name = self.get_bam_names()
+                counts = count_reads_unstranded(
+                    bam_filename,
+                    bam_index_name,
+                    intervals,
+                    intervals,
+                    each_read_counts_once=True,
+                )
+                result = {"chr": [], "window": [], "count": []}
+                for key, count in counts.items():
+                    if not key.startswith('_'):
+                        chr, window = key.split("_", 2)
+                        window = int(window)
+                        result["chr"].append(chr)
+                        result["window"].append(window)
+                        result["count"].append(count)
+                return pd.DataFrame(result)
+
+            def plot(df):
+                return (
+                    dp(df)
+                    .p9()
+                    .theme_bw()
+                    .add_line("window", "count")
+                    .facet_wrap("chr", scales='free')
+                    .title(self.name)
+                    .render(
+                        output_filename,
+                        width=6,
+                        height=2 + len(self.genome.get_chromosome_lengths()) * .25,
+                    )
+                )
+
+            return ppg.PlotJob(output_filename, calc, plot).depends_on(self.load())
+
+        register_qc(output_filename, QCCallback(build))
 
 
 __all__ = [Sample, AlignedSample]

@@ -240,7 +240,7 @@ class Sample:
                 "aligner (%s).align_job should have added a parameter invariant for aligner parameters"
                 % aligner
             )
-        print("name raw", self.name)
         return AlignedSample(
-            self.name, alignment_job, genome, self.is_paired, self.vid, output_dir
+            self.name, alignment_job, genome, self.is_paired, self.vid, output_dir,
+            aligner=aligner
         )
