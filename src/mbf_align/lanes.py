@@ -409,6 +409,7 @@ class AlignedSample:
                     .p9()
                     .theme_bw()
                     .add_line("window", "count")
+                    .scale_y_log10()
                     .facet_wrap("chr", scales='free')
                     .title(self.name)
                     .render(
