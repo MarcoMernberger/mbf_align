@@ -16,38 +16,39 @@ from mbf_align import (
 from mbf_align import Sample
 from mbf_align import PairingError
 from mbf_align import fastq2
-
-from .shared import data_path
+from mbf_sampledata import get_sample_data
 
 
 def test_FASTQsFromFile():
-    fn = data_path / "sample_a" / ".." / "sample_a" / "a.fastq"
+    fn = Path(get_sample_data(Path("mbf_align/sample_a") / ".." / "sample_a" / "a.fastq"))
     o = FASTQsFromFile(fn)
     assert o() == [(fn.resolve(),)]
 
 
 def test_FASTQsFromFileRaisesOnMissing():
-    fn = data_path / "sample_a" / "a.fastq.nosuchfile"
+    fn = get_sample_data(Path("mbf_align/sample_a") / "a.fastq.nosuchfile")
     with pytest.raises(IOError):
         FASTQsFromFile(fn)
 
 
 def test_FASTQsFromFilePaired():
-    fn = data_path / "sample_b" / "a_R1_.fastq.gz"
-    fn2 = data_path / "sample_b" / ".." / "sample_b" / "a_R2_.fastq.gz"
+    fn = Path(get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz"))
+    fn2 = Path(get_sample_data(
+        Path("mbf_align/sample_b") / ".." / "sample_b" / "a_R2_.fastq.gz"
+    ))
     o = FASTQsFromFile(fn, fn2)
     assert o() == [(fn.resolve(), fn2.resolve())]
 
 
 def test_FASTQsFromFilePairedMissingR2():
-    fn = data_path / "sample_b" / "a_R1_.fastq.gz"
-    fn2 = data_path / "sample_b" / "a_R2_.fastq.gz.nosuchfile"
+    fn = get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz")
+    fn2 = get_sample_data(Path("mbf_align/sample_b") / "a_R2_.fastq.gz.nosuchfile")
     with pytest.raises(IOError):
         FASTQsFromFile(fn, fn2)
 
 
 def test_FASTQsFromFolder():
-    folder = data_path / "sample_a"
+    folder = Path(get_sample_data(Path("mbf_align/sample_a")))
     o = FASTQsFromFolder(folder)
     import pprint
 
@@ -65,16 +66,16 @@ def test_FASTQsFromFolder_raises_on_non_existing():
 
 def test_FASTQsFromFolder_raises_on_no_fastqs():
     with pytest.raises(ValueError):
-        FASTQsFromFolder(data_path / "sample_f")
+        FASTQsFromFolder(get_sample_data(Path("mbf_align/sample_f")))
 
 
 def test_FASTQsFromFolder_raises_on_not_a_folder():
     with pytest.raises(ValueError):
-        FASTQsFromFolder(data_path / "sample_a" / "a.fastq")
+        FASTQsFromFolder(get_sample_data(Path("mbf_align/sample_a") / "a.fastq"))
 
 
 def test_FASTQsFromFolderPaired():
-    folder = data_path / "sample_b"
+    folder = Path(get_sample_data(Path("mbf_align/sample_b")))
     o = FASTQsFromFolder(folder)
     assert o() == [
         ((folder / "a_R1_.fastq.gz").resolve(), (folder / "a_R2_.fastq.gz").resolve())
@@ -82,21 +83,21 @@ def test_FASTQsFromFolderPaired():
 
 
 def test_FASTQsFromFolderR2_but_missing_any_r1():
-    folder = data_path / "sample_c"
+    folder = get_sample_data(Path("mbf_align/sample_c"))
     o = FASTQsFromFolder(folder)
     with pytest.raises(ValueError):
         o()
 
 
 def test_FASTQsFromFolder_pairing_files_fails():
-    folder = data_path / "sample_d"
+    folder = get_sample_data(Path("mbf_align/sample_d"))
     o = FASTQsFromFolder(folder)
     with pytest.raises(ValueError):
         o()
 
 
 def test_FASTQsFromFolder_pairing_files_fails2():
-    folder = data_path / "sample_e"
+    folder = get_sample_data(Path("mbf_align/sample_e"))
     o = FASTQsFromFolder(folder)
     with pytest.raises(ValueError):
         o()
@@ -163,26 +164,62 @@ class TestSamples:
     def test_build_fastq_strategy(self):
         # single filename
         assert build_fastq_strategy(
-            data_path / "sample_b" / ".." / "sample_b" / "a_R1_.fastq.gz"
-        )() == [((data_path / "sample_b" / "a_R1_.fastq.gz").resolve(),)]
+            get_sample_data(
+                Path("mbf_align/sample_b") / ".." / "sample_b" / "a_R1_.fastq.gz"
+            )
+        )() == [
+            (
+                (
+                    Path(get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz"))
+                ).resolve(),
+            )
+        ]
         assert build_fastq_strategy(
-            str(data_path / "sample_b" / ".." / "sample_b" / "a_R1_.fastq.gz")
-        )() == [((data_path / "sample_b" / "a_R1_.fastq.gz").resolve(),)]
+            str(
+                get_sample_data(
+                    Path("mbf_align/sample_b") / ".." / "sample_b" / "a_R1_.fastq.gz"
+                )
+            )
+        )() == [
+            (
+                (
+                    Path(get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz"))
+                ).resolve(),
+            )
+        ]
         # multiple files
         assert build_fastq_strategy(
             [
-                data_path / "sample_b" / ".." / "sample_b" / "a_R1_.fastq.gz",
-                data_path / "sample_b" / ".." / "sample_b" / "a_R2_.fastq.gz",
+                get_sample_data(
+                    Path("mbf_align/sample_b") / ".." / "sample_b" / "a_R1_.fastq.gz"
+                ),
+                get_sample_data(
+                    Path("mbf_align/sample_b") / ".." / "sample_b" / "a_R2_.fastq.gz"
+                ),
             ]
         )() == [
-            ((data_path / "sample_b" / "a_R1_.fastq.gz").resolve(),),
-            ((data_path / "sample_b" / "a_R2_.fastq.gz").resolve(),),
+            (
+                Path(
+                    get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz")
+                ).resolve(),
+            ),
+            (
+                Path(
+                    get_sample_data(Path("mbf_align/sample_b") / "a_R2_.fastq.gz")
+                ).resolve(),
+            ),
         ]
         # folder
-        assert build_fastq_strategy(data_path / "sample_b" / ".." / "sample_b")() == [
+        assert build_fastq_strategy(
+            get_sample_data(Path("mbf_align/sample_b") / ".." / "sample_b")
+        )() == [
             (
-                (data_path / "sample_b" / "a_R1_.fastq.gz").resolve(),
-                (data_path / "sample_b" / "a_R2_.fastq.gz").resolve(),
+                Path(
+                    get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz")
+                ).resolve(),
+                Path(
+                    get_sample_data(Path("mbf_align/sample_b") / "a_R2_.fastq.gz")
+                ).resolve(),
             )
         ]
         # job
@@ -192,7 +229,7 @@ class TestSamples:
         )
 
         # pass through
-        fn = data_path / "sample_a" / ".." / "sample_a" / "a.fastq"
+        fn = get_sample_data(Path("mbf_align/sample_a") / ".." / "sample_a" / "a.fastq")
         o = FASTQsFromFile(fn)
         assert build_fastq_strategy(o) is o
 
@@ -201,7 +238,9 @@ class TestSamples:
 
     def test_lane(self):
 
-        lane = Sample("Sample_a", data_path / "sample_a", False, vid="VA000")
+        lane = Sample(
+            "Sample_a", get_sample_data(Path("mbf_align/sample_a")), False, vid="VA000"
+        )
         assert lane.vid == "VA000"
         temp_job = lane.prepare_input()
         real_job = lane.save_input()
@@ -214,13 +253,22 @@ class TestSamples:
 
     def test_paired_modes(self):
         with pytest.raises(PairingError):
-            lane = Sample("Sample_a", data_path / "sample_b", False, vid="VA000")
+            lane = Sample(
+                "Sample_a",
+                get_sample_data(Path("mbf_align/sample_b")),
+                False,
+                vid="VA000",
+            )
             lane.prepare_input()
 
     def test_lane_paired_straight(self):
 
         lane = Sample(
-            "Sample_a", data_path / "sample_b", False, vid="VA000", pairing="paired"
+            "Sample_a",
+            get_sample_data(Path("mbf_align/sample_b")),
+            False,
+            vid="VA000",
+            pairing="paired",
         )
         assert lane.vid == "VA000"
         temp_job = lane.prepare_input()
@@ -237,8 +285,8 @@ class TestSamples:
 
         for input_fn, output_fn in zip(
             [
-                (data_path / "sample_b" / "a_R1_.fastq.gz"),
-                (data_path / "sample_b" / "a_R2_.fastq.gz"),
+                (get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz")),
+                (get_sample_data(Path("mbf_align/sample_b") / "a_R2_.fastq.gz")),
             ],
             real_job.filenames,
         ):
@@ -252,7 +300,7 @@ class TestSamples:
 
         lane = Sample(
             "Sample_a",
-            data_path / "sample_b",
+            get_sample_data(Path("mbf_align/sample_b")),
             False,
             vid="VA000",
             pairing="paired",
@@ -273,8 +321,8 @@ class TestSamples:
 
         for input_fn, output_fn in zip(
             [
-                (data_path / "sample_b" / "a_R1_.fastq.gz"),
-                (data_path / "sample_b" / "a_R2_.fastq.gz"),
+                (get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz")),
+                (get_sample_data(Path("mbf_align/sample_b") / "a_R2_.fastq.gz")),
             ],
             real_job.filenames,
         ):
@@ -288,7 +336,7 @@ class TestSamples:
 
         lane = Sample(
             "Sample_a",
-            data_path / "sample_b",
+            get_sample_data(Path("mbf_align/sample_b")),
             False,
             vid="VA000",
             pairing="paired_as_single",
@@ -306,8 +354,8 @@ class TestSamples:
 
         should = b""
         for input_fn in [
-            (data_path / "sample_b" / "a_R1_.fastq.gz"),
-            (data_path / "sample_b" / "a_R2_.fastq.gz"),
+            (get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz")),
+            (get_sample_data(Path("mbf_align/sample_b") / "a_R2_.fastq.gz")),
         ]:
             with gzip.GzipFile(input_fn, "r") as op:
                 should += op.read()
@@ -318,7 +366,11 @@ class TestSamples:
     def test_lane_paired_missing_R2(self):
 
         lane = Sample(
-            "Sample_a", data_path / "sample_a", False, vid="VA000", pairing="paired"
+            "Sample_a",
+            get_sample_data(Path("mbf_align/sample_a")),
+            False,
+            vid="VA000",
+            pairing="paired",
         )
         with pytest.raises(PairingError):
             lane.prepare_input()
@@ -326,7 +378,11 @@ class TestSamples:
     def test_lane_paired_only_first(self):
 
         lane = Sample(
-            "Sample_a", data_path / "sample_b", False, vid="VA000", pairing="only_first"
+            "Sample_a",
+            get_sample_data(Path("mbf_align/sample_b")),
+            False,
+            vid="VA000",
+            pairing="only_first",
         )
         assert lane.vid == "VA000"
         temp_job = lane.prepare_input()
@@ -341,8 +397,7 @@ class TestSamples:
 
         should = b""
         for input_fn in [
-            (data_path / "sample_b" / "a_R1_.fastq.gz"),
-            # (data_path / "sample_b" / "a_R2_.fastq.gz"),
+            (get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz"))
         ]:
             with gzip.GzipFile(input_fn, "r") as op:
                 should += op.read()
@@ -354,7 +409,7 @@ class TestSamples:
 
         lane = Sample(
             "Sample_a",
-            data_path / "sample_b",
+            get_sample_data(Path("mbf_align/sample_b")),
             False,
             vid="VA000",
             pairing="only_second",
@@ -372,8 +427,7 @@ class TestSamples:
 
         should = b""
         for input_fn in [
-            # (data_path / "sample_b" / "a_R1_.fastq.gz"),
-            (data_path / "sample_b" / "a_R2_.fastq.gz")
+            (get_sample_data(Path("mbf_align/sample_b") / "a_R2_.fastq.gz"))
         ]:
             with gzip.GzipFile(input_fn, "r") as op:
                 should += op.read()
@@ -384,17 +438,35 @@ class TestSamples:
     def test_pairing_invalid_value(self):
         with pytest.raises(ValueError):
             Sample(
-                "Sample_a", data_path / "sample_a", False, pairing="do_what_you_want"
+                "Sample_a",
+                get_sample_data(Path("mbf_align/sample_a")),
+                False,
+                pairing="do_what_you_want",
             )
         with pytest.raises(ValueError):
-            Sample("Sample_a", data_path / "sample_a", False, pairing=False)
+            Sample(
+                "Sample_a",
+                get_sample_data(Path("mbf_align/sample_a")),
+                False,
+                pairing=False,
+            )
         with pytest.raises(ValueError):
-            Sample("Sample_a", data_path / "sample_a", False, pairing=None)
+            Sample(
+                "Sample_a",
+                get_sample_data(Path("mbf_align/sample_a")),
+                False,
+                pairing=None,
+            )
         with pytest.raises(ValueError):
-            Sample("Sample_a", data_path / "sample_a", False, pairing=[5])
+            Sample(
+                "Sample_a",
+                get_sample_data(Path("mbf_align/sample_a")),
+                False,
+                pairing=[5],
+            )
 
     def test_lane_raises_on_pe_as_se(self):
-        lane = Sample("Sample_a", data_path / "sample_b", False)
+        lane = Sample("Sample_a", get_sample_data(Path("mbf_align/sample_b")), False)
         with pytest.raises(PairingError):
             lane.prepare_input()
 
@@ -467,7 +539,11 @@ class TestSamples:
 
         aligner = FakeAligner()
         lane = Sample(
-            "Sample_a", data_path / "sample_b", False, vid="VA000", pairing="paired"
+            "Sample_a",
+            get_sample_data(Path("mbf_align/sample_b")),
+            False,
+            vid="VA000",
+            pairing="paired",
         )
         genome = FakeGenome()
         params = {"shu": 123}
@@ -480,9 +556,13 @@ class TestSamples:
         assert Path(aligned_lane.load()[0].filenames[0]).exists()
         with open(aligned_lane.load()[0].filenames[0]) as op:
             actual = json.load(op)
-        with gzip.GzipFile(data_path / "sample_b" / "a_R1_.fastq.gz") as op:
+        with gzip.GzipFile(
+            get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz")
+        ) as op:
             should_0 = op.read(200).decode("utf-8")
-        with gzip.GzipFile(data_path / "sample_b" / "a_R2_.fastq.gz") as op:
+        with gzip.GzipFile(
+            get_sample_data(Path("mbf_align/sample_b") / "a_R2_.fastq.gz")
+        ) as op:
             should_1 = op.read(200).decode("utf-8")
 
         assert actual[0] == should_0
@@ -521,7 +601,11 @@ class TestSamples:
 
         aligner = FakeAligner()
         lane = Sample(
-            "Sample_a", data_path / "sample_b", False, vid="VA000", pairing="paired"
+            "Sample_a",
+            get_sample_data(Path("mbf_align/sample_b")),
+            False,
+            vid="VA000",
+            pairing="paired",
         )
         genome = FakeGenome()
         params = {"shu": 123}

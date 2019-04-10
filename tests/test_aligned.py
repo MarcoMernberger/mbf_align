@@ -2,17 +2,17 @@ import pytest
 import shutil
 from pathlib import Path
 import pypipegraph as ppg
-from .shared import data_path
 import mbf_align
 import pysam
 import pandas as pd
 from mbf_qualitycontrol.testing import assert_image_equal
+from mbf_sampledata import get_sample_data
 
 
 @pytest.mark.usefixtures("new_pipegraph")
 class TestAligned:
     def test_from_existing_bam(self):
-        bam_path = Path(data_path) / "ex2.bam"
+        bam_path = get_sample_data(Path("mbf_align/ex2.bam"))
         bam_job = ppg.FileInvariant(bam_path)
         genome = object()
         lane = mbf_align.AlignedSample("test_lane", bam_job, genome, False, "AA123")
@@ -60,13 +60,13 @@ class TestAligned:
             mbf_align.AlignedSample("test_lane", mfg, genome, False, "AA123")
 
     def test_lane_invariants_on_string(self):
-        bam_path = Path(data_path) / "ex2.bam"
+        bam_path = get_sample_data(Path("mbf_align/ex2.bam"))
         genome = object()
         lane = mbf_align.AlignedSample("test_lane", bam_path, genome, False, "AA123")
         assert isinstance(lane.load()[0], ppg.FileInvariant)
 
     def test_missing_index_file(self):
-        bam_path = Path(data_path) / "ex2.bam"
+        bam_path = get_sample_data(Path("mbf_align/ex2.bam"))
         no_index = "noindex.bam"
         shutil.copy(bam_path, no_index)
         genome = object()
@@ -82,7 +82,7 @@ class TestAligned:
 
     def test_creating_index_for_fg_job(self):
         def gen():
-            shutil.copy(Path(data_path) / "ex2.bam", "sample.bam")
+            shutil.copy(get_sample_data(Path("mbf_align/ex2.bam")), "sample.bam")
 
         ppg.util.global_pipegraph.quiet = False
 
@@ -97,7 +97,7 @@ class TestAligned:
 
     def test_creating_index_for_mfg(self):
         def gen():
-            shutil.copy(Path(data_path) / "ex2.bam", "sample.bam")
+            shutil.copy(get_sample_data(Path("mbf_align/ex2.bam")), "sample.bam")
 
         ppg.util.global_pipegraph.quiet = False
 
@@ -115,8 +115,12 @@ def get_human_22_fake_genome():
     from mbf_genomics.testing import MockGenome
     import gzip
 
-    genes = pd.read_msgpack(gzip.GzipFile(Path(data_path) / "hs_22_genes.msgpack.gz")).reset_index()
-    tr = pd.read_msgpack(gzip.GzipFile(Path(data_path) / "hs_22_transcripts.msgpack.gz")).reset_index()
+    genes = pd.read_msgpack(
+        gzip.GzipFile(get_sample_data(Path("mbf_align/hs_22_genes.msgpack.gz")))
+    ).reset_index()
+    tr = pd.read_msgpack(
+        gzip.GzipFile(get_sample_data(Path("mbf_align/hs_22_transcripts.msgpack.gz")))
+    ).reset_index()
     return MockGenome(df_genes=genes, df_transcripts=tr, chr_lengths={"22": 50818468})
 
 
@@ -130,12 +134,16 @@ class TestQualityControl:
         genome = get_human_22_fake_genome()
 
         lane = mbf_align.AlignedSample(
-            "test_lane", Path(data_path) / "rnaseq_spliced_chr22.bam", genome, False, "AA123"
+            "test_lane",
+            get_sample_data(Path("mbf_align/rnaseq_spliced_chr22.bam")),
+            genome,
+            False,
+            "AA123",
         )  # index creation is automatic
         assert "bam_indices" in lane.index_job.job_id
         do_qc()
         ppg.run_pipegraph()
         p = lane.result_dir / "complexity.png"
-        assert_image_equal(p, suffix='_complexity')
+        assert_image_equal(p, suffix="_complexity")
         p = lane.result_dir / "strandedness.png"
         assert_image_equal(p, suffix="_strandedness")

@@ -5,8 +5,8 @@ import pytest
 import pypipegraph as ppg
 from pathlib import Path
 
-from .shared import data_path
 from mbf_align import fastq2
+from mbf_sampledata import get_sample_data
 
 
 @pytest.mark.usefixtures("new_pipegraph")
@@ -605,10 +605,14 @@ def test_filtered_paired(new_pipegraph):
     of2 = "output_R2.fastq"
     tf1 = open("input_R1_.fastq", "wb")
     tf2 = open("input_R2_.fastq", "wb")
-    with gzip.GzipFile(data_path / "sample_b" / "a_R1_.fastq.gz", "rb") as op_in:
+    with gzip.GzipFile(
+        get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz"), "rb"
+    ) as op_in:
         tf1.write(op_in.read())
         tf1.flush()
-    with gzip.GzipFile(data_path / "sample_b" / "a_R2_.fastq.gz", "rb") as op_in:
+    with gzip.GzipFile(
+        get_sample_data(Path("mbf_align/sample_b") / "a_R2_.fastq.gz"), "rb"
+    ) as op_in:
         tf2.write(op_in.read())
         tf2.flush()
 
@@ -662,22 +666,31 @@ def test_quality_filter_depends_on_function_invariant(new_pipegraph):
 def test_read_creator_must_be_fastq_right_now(new_pipegraph):
     with pytest.raises(ValueError):
         fastq2.Straight().generate_aligner_input(
-            "test.fastq", [str(data_path / "sample_a/a.fastq")], False, "fail"
+            "test.fastq",
+            [str(get_sample_data(Path("mbf_align/sample_a)/a.fastq")))],
+            False,
+            "fail",
         )
     with pytest.raises(ValueError):
         fastq2.Filtered(lambda seq, qual, name: True).generate_aligner_input(
-            "test.fastq", [str(data_path / "sample_a/a.fastq")], False, "fail"
+            "test.fastq",
+            [str(get_sample_data(Path("mbf_align/sample_a)/a.fastq")))],
+            False,
+            "fail",
         )
     with pytest.raises(ValueError):
         fastq2.QualityFilter(lambda qual, seq: True).generate_aligner_input(
-            "test.fastq", [str(data_path / "sample_a/a.fastq")], False, "fail"
+            "test.fastq",
+            [str(get_sample_data(Path("mbf_align/sample_a)/a.fastq")))],
+            False,
+            "fail",
         )
 
 
 def test_quality_raises_on_0_return(new_pipegraph):
     with pytest.raises(ValueError):
         fastq2.QualityFilter(lambda qual, seq: 0).generate_aligner_input(
-            "test.fastq", [str(data_path / "sample_a/a.fastq")], False
+            "test.fastq", [str(get_sample_data(Path("mbf_align/sample_a/a.fastq")))], False
         )
 
 
