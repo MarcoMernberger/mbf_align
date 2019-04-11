@@ -288,7 +288,7 @@ class AlignedSample:
         return output_filename
 
     def register_qc_biotypes(self):
-        output_filename = self.result_dir / f"{self.genome.name}_reads_per_biotype.png"
+        output_filename = self.result_dir / "reads_per_biotype.png"
 
         def build():
             from mbf_genomics.genes import Genes

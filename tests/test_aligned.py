@@ -4,9 +4,8 @@ from pathlib import Path
 import pypipegraph as ppg
 import mbf_align
 import pysam
-import pandas as pd
 from mbf_qualitycontrol.testing import assert_image_equal
-from mbf_sampledata import get_sample_data
+from mbf_sampledata import get_sample_data, get_sample_path
 
 
 @pytest.mark.usefixtures("new_pipegraph")
@@ -135,9 +134,76 @@ class TestQualityControl:
         assert_image_equal(p, suffix="_complexity")
         p = lane.result_dir / "strandedness.png"
         assert_image_equal(p, suffix="_strandedness")
-        p = lane.result_dir / f"{genome.name}_reads_per_biotype.png"
+        p = lane.result_dir / "reads_per_biotype.png"
         assert_image_equal(p, suffix="_biotypes")
         p = lane.result_dir / ".." / "alignment_statistics.png"
         assert_image_equal(p, suffix="_alignment_statistics")
         p = lane.result_dir / f"subchromosomal_distribution.png"
         assert_image_equal(p, suffix="_subchromosomal_distribution")
+
+    def test_alignment_stats(self):
+        genome = object()
+        lane = mbf_align.AlignedSample(
+            "test_lane",
+            get_sample_data(Path("mbf_align/rnaseq_spliced_chr22.bam")),
+            genome,
+            False,
+            "AA123",
+        )  # index creation is automatic
+        counts = {"get_bam": 0}
+
+        def get_bam():
+            counts["get_bam"] += 1
+
+            class DummySam:
+                mapped = 5
+                unmapped = 10
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    pass
+
+            return DummySam()
+
+        lane.get_bam = get_bam
+        assert lane.get_alignment_stats() == {"Mapped": 5, "Unmapped": 10}
+        assert counts["get_bam"] == 1
+
+        class DummyAlignerWithout:
+            pass
+
+        lane = mbf_align.AlignedSample(
+            "test_lane2",
+            get_sample_data(Path("mbf_align/rnaseq_spliced_chr22.bam")),
+            genome,
+            False,
+            "AA123",
+            aligner=DummyAlignerWithout(),
+        )  # index creation is automatic
+        lane.get_bam = get_bam
+        assert counts["get_bam"] == 1
+        assert lane.get_alignment_stats() == {"Mapped": 5, "Unmapped": 10}
+        assert counts["get_bam"] == 2
+
+        class DummyAlignerWith:
+            def get_alignment_stats(self, bam_filename):
+                assert (
+                    Path(bam_filename).resolve()
+                    == get_sample_path("mbf_align/rnaseq_spliced_chr22.bam").resolve()
+                )
+                return {"Hello": 23}
+
+        lane = mbf_align.AlignedSample(
+            "test_lane3",
+            get_sample_data("mbf_align/rnaseq_spliced_chr22.bam"),
+            genome,
+            False,
+            "AA123",
+            aligner=DummyAlignerWith(),
+        )  # index creation is automatic
+        lane.get_bam = get_bam
+        assert counts["get_bam"] == 2
+        assert lane.get_alignment_stats() == {"Hello": 23}
+        assert counts["get_bam"] == 2
