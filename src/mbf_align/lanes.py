@@ -5,6 +5,7 @@ import pypipegraph as ppg
 import pysam
 from pathlib import Path
 import pandas as pd
+import collections
 from dppd import dppd
 import dppd_plotnine  # noqa:F401 -
 from mbf_qualitycontrol import register_qc, QCCallback, get_qc
@@ -166,6 +167,7 @@ class AlignedSample:
         self.register_qc_biotypes()
         self.register_qc_alignment_stats()
         self.register_qc_subchromosomal()
+        self.register_qc_splicing()
 
     def register_qc_complexity(self):
 
@@ -395,7 +397,7 @@ class AlignedSample:
                 )
                 result = {"chr": [], "window": [], "count": []}
                 for key, count in counts.items():
-                    if not key.startswith('_'):
+                    if not key.startswith("_"):
                         chr, window = key.split("_", 2)
                         window = int(window)
                         result["chr"].append(chr)
@@ -410,13 +412,74 @@ class AlignedSample:
                     .theme_bw()
                     .add_line("window", "count")
                     .scale_y_log10()
-                    .facet_wrap("chr", scales='free')
+                    .facet_wrap("chr", scales="free")
                     .title(self.name)
                     .render(
                         output_filename,
                         width=6,
-                        height=2 + len(self.genome.get_chromosome_lengths()) * .25,
+                        height=2 + len(self.genome.get_chromosome_lengths()) * 0.25,
                     )
+                )
+
+            return ppg.PlotJob(output_filename, calc, plot).depends_on(self.load())
+
+        register_qc(output_filename, QCCallback(build))
+
+    def register_qc_splicing(self):
+        """How many reads were spliced? How many of those splices were known splice sites,
+        how many were novel"""
+        output_filename = self.result_dir / "splice_sites.png"
+
+        def build():
+            def calc():
+                from mbf_bam import count_introns
+
+                bam_filename, bam_index_name = self.get_bam_names()
+                counts_per_chromosome = count_introns(bam_filename, bam_index_name)
+                known_splice_sites_by_chr = {
+                    chr: set() for chr in self.genome.get_chromosome_lengths()
+                }
+                for gene in self.genome.genes.values():
+                    for start, stop in zip(*gene.introns):
+                        known_splice_sites_by_chr[gene.chr].add((start, stop))
+                total_counts = collections.Counter()
+                known_count = 0
+                unknown_count = 0
+                for chr, counts in counts_per_chromosome.items():
+                    for k, v in counts.items():
+                        if k[0] == 0xFFFFFFFF:
+                            intron_counts = 0xFFFFFFFF - k[1]
+                            total_counts[intron_counts] += v
+                        else:
+                            if k in known_splice_sites_by_chr[chr]:
+                                known_count += v
+                            else:
+                                unknown_count += v
+                result = {"side": [], "x": [], "count": []}
+                result["side"].append("splice sites")
+                result["x"].append("unknown")
+                result["count"].append(unknown_count)
+                result["side"].append("splice sites")
+                result["x"].append("known")
+                result["count"].append(known_count)
+
+                for x, count in total_counts.items():
+                    result["side"].append("reads with x splices")
+                    result["x"].append(x)
+                    result["count"].append(count)
+
+                return pd.DataFrame(result)
+
+            def plot(df):
+                return (
+                    dp(df)
+                    .p9()
+                    .theme_bw()
+                    .add_bar("x", "count", stat="identity")
+                    .facet_wrap("side", scales="free", ncol=1)
+                    .title(self.name)
+                    .theme(panel_spacing_y=0.2)
+                    .render(output_filename)
                 )
 
             return ppg.PlotJob(output_filename, calc, plot).depends_on(self.load())

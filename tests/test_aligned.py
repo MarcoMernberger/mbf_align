@@ -138,8 +138,10 @@ class TestQualityControl:
         assert_image_equal(p, suffix="_biotypes")
         p = lane.result_dir / ".." / "alignment_statistics.png"
         assert_image_equal(p, suffix="_alignment_statistics")
-        p = lane.result_dir / f"subchromosomal_distribution.png"
+        p = lane.result_dir / "subchromosomal_distribution.png"
         assert_image_equal(p, suffix="_subchromosomal_distribution")
+        p = lane.result_dir / "splice_sites.png"
+        assert_image_equal(p, suffix="_splice_sites")
 
     def test_alignment_stats(self):
         genome = object()
