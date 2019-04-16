@@ -215,20 +215,97 @@ class AlignedSample:
                     .pd
                 )
 
-            return ppg.PlotJob(output_filename, calc, plot).depends_on(self.load)
+            return (
+                ppg.PlotJob(output_filename, calc, plot)
+                .depends_on(self.load)
+                .use_cores(-1)
+            )
 
         register_qc(output_filename, QCCallback(build))
         return output_filename
 
     def register_qc_gene_strandedness(self):
+        from mbf_genomics.genes.anno_tag_counts import _IntervalStrategy
+
+        class IntervalStrategyExonIntronClassification(_IntervalStrategy):
+            """For QC purposes, defines all intron/exon intervals tagged
+            with nothing but intron/exon
+
+            See mbf_align.lanes.AlignedLane.register_qc_gene_strandedness
+            
+            """
+
+            def _get_interval_tuples_by_chr(self, genome):
+                from mbf_nested_intervals import IntervalSet
+
+                coll = {chr: [] for chr in genome.get_chromosome_lengths()}
+                ii = 0
+                for g in genome.genes.values():
+                    exons = g.exons_overlapping
+                    if len(exons[0]) == 0:
+                        exons = g.exons_merged
+                    for start, stop in zip(*exons):
+                        coll[g.chr].append(
+                            (start, stop, 0b0101 if g.strand == 1 else 0b0110)
+                        )
+                    for start, stop in zip(*g.introns):
+                        coll[g.chr].append(
+                            (start, stop, 0b1001 if g.strand == 1 else 0b1010)
+                        )
+                result = {}
+                for chr, tups in coll.items():
+                    iset = IntervalSet.from_tuples_with_id(tups)
+                    # iset = iset.merge_split()
+                    iset = iset.merge_hull()
+                    if iset.any_overlapping():
+                        raise NotImplementedError("Should not be reached")
+                    result[chr] = []
+                    for start, stop, ids in iset.to_tuples_with_id():
+                        ids = set(ids)
+                        if len(ids) == 1:
+                            id = list(ids)[0]
+                            if id == 0b0101:
+                                tag = "exon"
+                                strand = +1
+                            elif id == 0b0110:
+                                tag = "exon"
+                                strand = -1
+                            elif id == 0b1001:
+                                tag = "intron"
+                                strand = +1
+                            elif id == 0b1010:
+                                tag = "intron"
+                                strand = -1
+                            else:  # pragma: no cover
+                                raise NotImplementedError("Should not be reached")
+                        else:
+                            down = 0
+                            for i in ids:
+                                down |= i
+                            if down & 0b1100 == 0b1100:
+                                tag = "both"
+                            elif down & 0b0100 == 0b0100:
+                                tag = "exon"
+                            else:
+                                tag = "intron"
+                            if down & 0b11 == 0b11:
+                                tag += "_undecidable"
+                                strand = (
+                                    1
+                                )  # doesn't matter, but must be one or the other
+                            elif down & 0b01:
+                                strand = 1
+                            else:
+                                strand -= 1
+
+                        result[chr].append((tag, strand, [start], [stop]))
+                return result
+
         output_filename = self.result_dir / "strandedness.png"
 
         def build():
             def calc():
-                from mbf_genomics.genes.anno_tag_counts import (
-                    IntervalStrategyExonIntronClassification,
-                    IntervalStrategyGene,
-                )
+                from mbf_genomics.genes.anno_tag_counts import IntervalStrategyGene
                 from mbf_bam import count_reads_stranded
 
                 interval_strategy = IntervalStrategyExonIntronClassification()
@@ -284,7 +361,11 @@ class AlignedSample:
                     .pd
                 )
 
-            return ppg.PlotJob(output_filename, calc, plot).depends_on(self.load)
+            return (
+                ppg.PlotJob(output_filename, calc, plot)
+                .depends_on(self.load)
+                .use_cores(-1)
+            )
 
         register_qc(output_filename, QCCallback(build))
         return output_filename
@@ -298,6 +379,7 @@ class AlignedSample:
 
             genes = Genes(self.genome)
             anno = GeneUnstranded(self)
+            anno.register_qc = lambda self: None  # can't register qc when doing qc...
 
             def plot(output_filename):
                 return (
@@ -319,8 +401,10 @@ class AlignedSample:
                     )
                 )
 
-            return ppg.FileGeneratingJob(output_filename, plot).depends_on(
-                genes.add_annotator(anno)
+            return (
+                ppg.FileGeneratingJob(output_filename, plot)
+                .depends_on(genes.add_annotator(anno))
+                .use_cores(-1)
             )
 
         register_qc(output_filename, QCCallback(build))
@@ -377,11 +461,35 @@ class AlignedSample:
     def register_qc_subchromosomal(self):
         """Subchromosom distribution plot - good to detect amplified regions
         or ancient virus awakening"""
+        import mbf_genomics
+
         output_filename = self.result_dir / "subchromosomal_distribution.png"
+
+        class IntervalStrategyWindows(
+            mbf_genomics.genes.anno_tag_counts._IntervalStrategy
+        ):
+            """For QC purposes, spawn all chromosomes with 
+            windows of the definied size
+
+            See mbf_align.lanes.AlignedLane.register_qc_subchromosomal
+            
+            """
+
+            def __init__(self, window_size):
+                self.window_size = window_size
+
+            def _get_interval_tuples_by_chr(self, genome):
+                result = {}
+                for chr, length in genome.get_chromosome_lengths().items():
+                    result[chr] = []
+                    for ii in range(0, length, self.window_size):
+                        result[chr].append(
+                            ("%s_%i" % (chr, ii), 0, [ii], [ii + self.window_size])
+                        )
+                return result
 
         def build():
             def calc():
-                from mbf_genomics.genes.anno_tag_counts import IntervalStrategyWindows
                 from mbf_bam import count_reads_unstranded
 
                 interval_strategy = IntervalStrategyWindows(250_000)
@@ -395,10 +503,12 @@ class AlignedSample:
                     intervals,
                     each_read_counts_once=True,
                 )
+                true_chromosomes = set(self.genome.get_true_chromosomes())
                 result = {"chr": [], "window": [], "count": []}
                 for key, count in counts.items():
                     if not key.startswith("_"):
                         chr, window = key.split("_", 2)
+                    if chr in true_chromosomes:
                         window = int(window)
                         result["chr"].append(chr)
                         result["window"].append(window)
@@ -412,16 +522,20 @@ class AlignedSample:
                     .theme_bw()
                     .add_line("window", "count")
                     .scale_y_log10()
-                    .facet_wrap("chr", scales="free")
+                    .facet_wrap("chr", scales="free", ncol=1)
                     .title(self.name)
                     .render(
                         output_filename,
                         width=6,
-                        height=2 + len(self.genome.get_chromosome_lengths()) * 0.25,
+                        height=2 + len(df["chr"].unique()) * 0.75,
                     )
                 )
 
-            return ppg.PlotJob(output_filename, calc, plot).depends_on(self.load())
+            return (
+                ppg.PlotJob(output_filename, calc, plot)
+                .depends_on(self.load())
+                .use_cores(-1)
+            )
 
         register_qc(output_filename, QCCallback(build))
 
@@ -482,7 +596,11 @@ class AlignedSample:
                     .render(output_filename)
                 )
 
-            return ppg.PlotJob(output_filename, calc, plot).depends_on(self.load())
+            return (
+                ppg.PlotJob(output_filename, calc, plot)
+                .depends_on(self.load())
+                .use_cores(-1)
+            )
 
         register_qc(output_filename, QCCallback(build))
 
