@@ -31,6 +31,8 @@ class TestAligned:
         assert isinstance(b, pysam.Samfile)
         b = lane.get_unique_aligned_bam()
         assert isinstance(b, pysam.Samfile)
+        assert lane.get_bam_names()[0] == bam_path
+        assert lane.get_bam_names()[1] == bam_path + '.bai'
 
         assert lane.mapped_reads() == 8
         assert lane.unmapped_reads() == 0
@@ -126,8 +128,7 @@ class TestQualityControl:
             genome,
             False,
             "AA123",
-        )  # index creation is automatic
-        assert "bam_indices" in lane.index_job.job_id
+        )
         do_qc()
         ppg.run_pipegraph()
         p = lane.result_dir / "complexity.png"

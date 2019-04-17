@@ -224,7 +224,7 @@ class AlignedSample:
         register_qc(output_filename, QCCallback(build))
         return output_filename
 
-    def register_qc_gene_strandedness(self):
+    def register_qc_gene_strandedness(self):  # noqa: C901
         from mbf_genomics.genes.anno_tag_counts import _IntervalStrategy
 
         class IntervalStrategyExonIntronClassification(_IntervalStrategy):
@@ -232,17 +232,16 @@ class AlignedSample:
             with nothing but intron/exon
 
             See mbf_align.lanes.AlignedLane.register_qc_gene_strandedness
-            
+
             """
 
             def _get_interval_tuples_by_chr(self, genome):
                 from mbf_nested_intervals import IntervalSet
 
                 coll = {chr: [] for chr in genome.get_chromosome_lengths()}
-                ii = 0
                 for g in genome.genes.values():
                     exons = g.exons_overlapping
-                    if len(exons[0]) == 0:
+                    if len(exons[0]) == 0:  # pragma: no cover
                         exons = g.exons_merged
                     for start, stop in zip(*exons):
                         coll[g.chr].append(
@@ -286,8 +285,10 @@ class AlignedSample:
                                 tag = "both"
                             elif down & 0b0100 == 0b0100:
                                 tag = "exon"
-                            else:
-                                tag = "intron"
+                            else:  # pragma: no cover  haven't observed this case in the wild yet.
+                                tag = (  # pragma: no cover
+                                    "intron"  # pragma: no cover
+                                )  # pragma: no cover  haven't observed this case in the wild yet.
                             if down & 0b11 == 0b11:
                                 tag += "_undecidable"
                                 strand = (
@@ -468,11 +469,11 @@ class AlignedSample:
         class IntervalStrategyWindows(
             mbf_genomics.genes.anno_tag_counts._IntervalStrategy
         ):
-            """For QC purposes, spawn all chromosomes with 
+            """For QC purposes, spawn all chromosomes with
             windows of the definied size
 
             See mbf_align.lanes.AlignedLane.register_qc_subchromosomal
-            
+
             """
 
             def __init__(self, window_size):
@@ -508,11 +509,11 @@ class AlignedSample:
                 for key, count in counts.items():
                     if not key.startswith("_"):
                         chr, window = key.split("_", 2)
-                    if chr in true_chromosomes:
-                        window = int(window)
-                        result["chr"].append(chr)
-                        result["window"].append(window)
-                        result["count"].append(count)
+                        if chr in true_chromosomes:  # pragma: no branch
+                            window = int(window)
+                            result["chr"].append(chr)
+                            result["window"].append(window)
+                            result["count"].append(count)
                 return pd.DataFrame(result)
 
             def plot(df):
@@ -537,7 +538,7 @@ class AlignedSample:
                 .use_cores(-1)
             )
 
-        register_qc(output_filename, QCCallback(build))
+        return register_qc(output_filename, QCCallback(build))
 
     def register_qc_splicing(self):
         """How many reads were spliced? How many of those splices were known splice sites,
