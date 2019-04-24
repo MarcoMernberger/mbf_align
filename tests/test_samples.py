@@ -20,7 +20,9 @@ from mbf_sampledata import get_sample_data
 
 
 def test_FASTQsFromFile():
-    fn = Path(get_sample_data(Path("mbf_align/sample_a") / ".." / "sample_a" / "a.fastq"))
+    fn = Path(
+        get_sample_data(Path("mbf_align/sample_a") / ".." / "sample_a" / "a.fastq")
+    )
     o = FASTQsFromFile(fn)
     assert o() == [(fn.resolve(),)]
 
@@ -33,9 +35,11 @@ def test_FASTQsFromFileRaisesOnMissing():
 
 def test_FASTQsFromFilePaired():
     fn = Path(get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz"))
-    fn2 = Path(get_sample_data(
-        Path("mbf_align/sample_b") / ".." / "sample_b" / "a_R2_.fastq.gz"
-    ))
+    fn2 = Path(
+        get_sample_data(
+            Path("mbf_align/sample_b") / ".." / "sample_b" / "a_R2_.fastq.gz"
+        )
+    )
     o = FASTQsFromFile(fn, fn2)
     assert o() == [(fn.resolve(), fn2.resolve())]
 
@@ -103,7 +107,7 @@ def test_FASTQsFromFolder_pairing_files_fails2():
         o()
 
 
-@pytest.mark.usefixtures("new_pipegraph")
+@pytest.mark.usefixtures("new_pipegraph_no_qc")
 class TestSamples:
     def test_FASTQsFromJob(self):
         job = FileGeneratingJob("test.fastq.gz", lambda of: None)
@@ -495,6 +499,15 @@ class TestSamples:
 
         class FakeGenome:
             name = "FakeGenome"
+
+            def download_genome(self):
+                return []
+
+            def job_genes(self):
+                return []
+
+            def job_transcripts(self):
+                return []
 
             def build_index(self, aligner, fasta_to_use=None, gtf_to_use=None):
                 job = ppg.FileGeneratingJob(

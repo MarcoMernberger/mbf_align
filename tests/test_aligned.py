@@ -6,9 +6,10 @@ import mbf_align
 import pysam
 from mbf_qualitycontrol.testing import assert_image_equal
 from mbf_sampledata import get_sample_data, get_sample_path
+from mbf_qualitycontrol import prune_qc, get_qc_jobs
 
 
-@pytest.mark.usefixtures("new_pipegraph")
+@pytest.mark.usefixtures("new_pipegraph_no_qc")
 class TestAligned:
     def test_from_existing_bam(self):
         bam_path = get_sample_data(Path("mbf_align/ex2.bam"))
@@ -32,10 +33,12 @@ class TestAligned:
         b = lane.get_unique_aligned_bam()
         assert isinstance(b, pysam.Samfile)
         assert lane.get_bam_names()[0] == bam_path
-        assert lane.get_bam_names()[1] == bam_path + '.bai'
+        assert lane.get_bam_names()[1] == bam_path + ".bai"
 
         assert lane.mapped_reads() == 8
         assert lane.unmapped_reads() == 0
+        for job in get_qc_jobs():
+            assert job._pruned
 
     def test_lane_invariants_on_non_accepted_value(self):
         genome = object()
@@ -114,9 +117,7 @@ class TestAligned:
 
 @pytest.mark.usefixtures("new_pipegraph")
 class TestQualityControl:
-    def test_qc_plots(self, new_pipegraph):
-        new_pipegraph.new_pipegraph(quiet=False)
-        from mbf_qualitycontrol import do_qc
+    def prep_lane(self):
         from mbf_sampledata import get_human_22_fake_genome
 
         # straight from chr22 of the human genome
@@ -129,23 +130,38 @@ class TestQualityControl:
             False,
             "AA123",
         )
-        do_qc()
+        return lane
+
+    def _test_qc_plots(self, filename, remaining_job_count, chdir="."):
+        lane = self.prep_lane()
+        prune_qc(lambda job: filename in job.job_id)
+        not_pruned_count = sum([1 for x in get_qc_jobs() if not x._pruned])
+        assert not_pruned_count == remaining_job_count  # plot cache, plot_table, plot
         ppg.run_pipegraph()
-        p = lane.result_dir / "complexity.png"
-        assert_image_equal(p, suffix="_complexity")
-        p = lane.result_dir / "strandedness.png"
-        assert_image_equal(p, suffix="_strandedness")
-        p = lane.result_dir / "reads_per_biotype.png"
-        assert_image_equal(p, suffix="_biotypes")
-        p = lane.result_dir / ".." / "alignment_statistics.png"
-        assert_image_equal(p, suffix="_alignment_statistics")
-        p = lane.result_dir / "subchromosomal_distribution.png"
-        assert_image_equal(p, suffix="_subchromosomal_distribution")
-        p = lane.result_dir / "splice_sites.png"
-        assert_image_equal(p, suffix="_splice_sites")
+        assert_image_equal(lane.result_dir / chdir / filename, suffix="_" + filename)
+
+    def test_qc_complexity(self):
+        self._test_qc_plots("complexity.png", 3)
+
+    def test_qc_strandedness(self):
+        self._test_qc_plots("strandedness.png", 3)
+
+    def test_qc_reads_per_biotype(self):
+        self._test_qc_plots("reads_per_biotype.png", 1)
+
+    def test_qc_alignment_statistics(self):
+        self._test_qc_plots("alignment_statistics.png", 1, "..")
+
+    def test_qc_subchromal_distribution(self):
+        self._test_qc_plots("subchromosomal_distribution.png", 3)
+
+    def test_qc_splice_sites(self):
+        self._test_qc_plots("splice_sites.png", 3)
 
     def test_alignment_stats(self):
-        genome = object()
+        from mbf_sampledata import get_human_22_fake_genome
+
+        genome = get_human_22_fake_genome()
         lane = mbf_align.AlignedSample(
             "test_lane",
             get_sample_data(Path("mbf_align/rnaseq_spliced_chr22.bam")),

@@ -8,7 +8,7 @@ import pandas as pd
 import collections
 from dppd import dppd
 import dppd_plotnine  # noqa:F401 -
-from mbf_qualitycontrol import register_qc, QCCallback, get_qc
+from mbf_qualitycontrol import register_qc, QCCollectingJob, qc_disabled
 
 dp, X = dppd()
 
@@ -162,67 +162,64 @@ class AlignedSample:
                 return {"Mapped": f.mapped, "Unmapped": f.unmapped}
 
     def register_qc(self):
-        self.register_qc_complexity()
-        self.register_qc_gene_strandedness()
-        self.register_qc_biotypes()
-        self.register_qc_alignment_stats()
-        self.register_qc_subchromosomal()
-        self.register_qc_splicing()
+        if not qc_disabled():
+            self.register_qc_complexity()
+            self.register_qc_gene_strandedness()
+            self.register_qc_biotypes()
+            self.register_qc_alignment_stats()
+            self.register_qc_subchromosomal()
+            self.register_qc_splicing()
 
     def register_qc_complexity(self):
 
         output_filename = self.result_dir / "complexity.png"
 
-        def build():
-            def calc():
-                import mbf_bam
+        def calc():
+            import mbf_bam
 
-                counts = mbf_bam.calculate_duplicate_distribution(
-                    str(self.bam_filename), str(self.index_filename)
-                )
-                return pd.DataFrame(
-                    {
-                        "source": self.name,
-                        "Repetition count": list(counts.keys()),
-                        "Count": list(counts.values()),
-                    }
-                )
-
-            def plot(df):
-                unique_count = df["Count"].sum()
-                total_count = (df["Count"] * df["Repetition count"]).sum()
-                pcb = float(unique_count) / total_count
-                if pcb >= 0.9:  # pragma: no cover
-                    severity = "none"
-                elif pcb >= 0.8:  # pragma: no cover
-                    severity = "mild"
-                elif pcb >= 0.5:  # pragma: no cover
-                    severity = "moderate"
-                else:
-                    severity = "severe"
-                title = (
-                    "Genomic positions with repetition count reads\nTotal read count: %i\nPCR Bottleneck coefficient: %.2f (%s)"
-                    % (total_count, pcb, severity)
-                )
-                return (
-                    dp(df)
-                    .p9()
-                    .theme_bw()
-                    .add_point("Repetition count", "Count")
-                    .add_line("Repetition count", "Count")
-                    .scale_y_continuous(trans="log2")
-                    .title(title)
-                    .pd
-                )
-
-            return (
-                ppg.PlotJob(output_filename, calc, plot)
-                .depends_on(self.load)
-                .use_cores(-1)
+            counts = mbf_bam.calculate_duplicate_distribution(
+                str(self.bam_filename), str(self.index_filename)
+            )
+            return pd.DataFrame(
+                {
+                    "source": self.name,
+                    "Repetition count": list(counts.keys()),
+                    "Count": list(counts.values()),
+                }
             )
 
-        register_qc(output_filename, QCCallback(build))
-        return output_filename
+        def plot(df):
+            unique_count = df["Count"].sum()
+            total_count = (df["Count"] * df["Repetition count"]).sum()
+            pcb = float(unique_count) / total_count
+            if pcb >= 0.9:  # pragma: no cover
+                severity = "none"
+            elif pcb >= 0.8:  # pragma: no cover
+                severity = "mild"
+            elif pcb >= 0.5:  # pragma: no cover
+                severity = "moderate"
+            else:
+                severity = "severe"
+            title = (
+                "Genomic positions with repetition count reads\nTotal read count: %i\nPCR Bottleneck coefficient: %.2f (%s)"
+                % (total_count, pcb, severity)
+            )
+            return (
+                dp(df)
+                .p9()
+                .theme_bw()
+                .add_point("Repetition count", "Count")
+                .add_line("Repetition count", "Count")
+                .scale_y_continuous(trans="log2")
+                .title(title)
+                .pd
+            )
+
+        return register_qc(
+            ppg.PlotJob(output_filename, calc, plot)
+            .depends_on(self.load())
+            .use_cores(-1)
+        )
 
     def register_qc_gene_strandedness(self):  # noqa: C901
         from mbf_genomics.genes.anno_tag_counts import _IntervalStrategy
@@ -304,160 +301,136 @@ class AlignedSample:
 
         output_filename = self.result_dir / "strandedness.png"
 
-        def build():
-            def calc():
-                from mbf_genomics.genes.anno_tag_counts import IntervalStrategyGene
-                from mbf_bam import count_reads_stranded
+        def calc():
+            from mbf_genomics.genes.anno_tag_counts import IntervalStrategyGene
+            from mbf_bam import count_reads_stranded
 
-                interval_strategy = IntervalStrategyExonIntronClassification()
-                intervals = interval_strategy._get_interval_tuples_by_chr(self.genome)
+            interval_strategy = IntervalStrategyExonIntronClassification()
+            intervals = interval_strategy._get_interval_tuples_by_chr(self.genome)
 
-                bam_filename, bam_index_name = self.get_bam_names()
-                forward, reverse = count_reads_stranded(
-                    bam_filename,
-                    bam_index_name,
-                    intervals,
-                    IntervalStrategyGene()._get_interval_tuples_by_chr(self.genome),
-                    each_read_counts_once=True,
-                )
-                result = {"what": [], "count": [], "sample": self.name}
-                for k in forward.keys() | reverse.keys():
-                    if k.endswith("_undecidable"):
-                        result["what"].append(k)
-                        result["count"].append(forward.get(k, 0) + reverse.get(k, 0))
-                    elif not k.startswith("_"):
-                        result["what"].append(k + "_correct")
-                        result["count"].append(forward.get(k, 0))
-                        result["what"].append(k + "_reversed")
-                        result["count"].append(reverse.get(k, 0))
-                    elif k == "_outside":
-                        result["what"].append("outside")
-                        result["count"].append(forward.get(k, 0))
+            bam_filename, bam_index_name = self.get_bam_names()
+            forward, reverse = count_reads_stranded(
+                bam_filename,
+                bam_index_name,
+                intervals,
+                IntervalStrategyGene()._get_interval_tuples_by_chr(self.genome),
+                each_read_counts_once=True,
+            )
+            result = {"what": [], "count": [], "sample": self.name}
+            for k in forward.keys() | reverse.keys():
+                if k.endswith("_undecidable"):
+                    result["what"].append(k)
+                    result["count"].append(forward.get(k, 0) + reverse.get(k, 0))
+                elif not k.startswith("_"):
+                    result["what"].append(k + "_correct")
+                    result["count"].append(forward.get(k, 0))
+                    result["what"].append(k + "_reversed")
+                    result["count"].append(reverse.get(k, 0))
+                elif k == "_outside":
+                    result["what"].append("outside")
+                    result["count"].append(forward.get(k, 0))
 
-                return pd.DataFrame(result)
+            return pd.DataFrame(result)
 
-            def plot(df):
-                return (
-                    dp(df)
-                    .mutate(
-                        what=pd.Categorical(
-                            df["what"],
-                            [
-                                "exon_correct",
-                                "exon_reversed",
-                                "exon_undecidable",
-                                "intron_correct",
-                                "intron_reversed",
-                                "intron_undecidable",
-                                "both_correct",
-                                "both_reversed",
-                                "both_undecidable",
-                                "outside",
-                            ],
-                        )
-                    )
-                    .p9()
-                    .add_bar("sample", "count", fill="what", position="dodge")
-                    .turn_x_axis_labels()
-                    .pd
-                )
-
+        def plot(df):
             return (
-                ppg.PlotJob(output_filename, calc, plot)
-                .depends_on(self.load)
-                .use_cores(-1)
+                dp(df)
+                .mutate(
+                    what=pd.Categorical(
+                        df["what"],
+                        [
+                            "exon_correct",
+                            "exon_reversed",
+                            "exon_undecidable",
+                            "intron_correct",
+                            "intron_reversed",
+                            "intron_undecidable",
+                            "both_correct",
+                            "both_reversed",
+                            "both_undecidable",
+                            "outside",
+                        ],
+                    )
+                )
+                .p9()
+                .add_bar("sample", "count", fill="what", position="dodge")
+                .turn_x_axis_labels()
+                .pd
             )
 
-        register_qc(output_filename, QCCallback(build))
-        return output_filename
+        return register_qc(
+            ppg.PlotJob(output_filename, calc, plot)
+            .depends_on(self.load())
+            .use_cores(-1)
+        )
 
     def register_qc_biotypes(self):
         output_filename = self.result_dir / "reads_per_biotype.png"
 
-        def build():
-            from mbf_genomics.genes import Genes
-            from mbf_genomics.genes.anno_tag_counts import GeneUnstranded
+        from mbf_genomics.genes import Genes
+        from mbf_genomics.genes.anno_tag_counts import GeneUnstranded
 
-            genes = Genes(self.genome)
-            anno = GeneUnstranded(self)
-            anno.register_qc = lambda self: None  # can't register qc when doing qc...
+        genes = Genes(self.genome)
+        anno = GeneUnstranded(self)
 
-            def plot(output_filename):
-                return (
-                    dp(genes.df)
-                    .groupby("biotype")
-                    .summarize((anno.columns[0], lambda x: x.sum(), "read count"))
-                    .mutate(sample=self.name)
-                    .p9()
-                    .theme_bw()
-                    .annotation_stripes()
-                    .add_bar("biotype", "read count", stat="identity")
-                    # .turn_x_axis_labels()
-                    .coord_flip()
-                    .title(self.name)
-                    .render(
-                        output_filename,
-                        width=6,
-                        height=2 + len(genes.df.biotype.unique()) * 0.25,
-                    )
-                )
-
+        def plot(output_filename):
+            print(genes.df.columns)
             return (
-                ppg.FileGeneratingJob(output_filename, plot)
-                .depends_on(genes.add_annotator(anno))
-                .use_cores(-1)
+                dp(genes.df)
+                .groupby("biotype")
+                .summarize((anno.columns[0], lambda x: x.sum(), "read count"))
+                .mutate(sample=self.name)
+                .p9()
+                .theme_bw()
+                .annotation_stripes()
+                .add_bar("biotype", "read count", stat="identity")
+                # .turn_x_axis_labels()
+                .coord_flip()
+                .title(self.name)
+                .render(
+                    output_filename,
+                    width=6,
+                    height=2 + len(genes.df.biotype.unique()) * 0.25,
+                )
             )
 
-        register_qc(output_filename, QCCallback(build))
+        return register_qc(
+            ppg.FileGeneratingJob(output_filename, plot).depends_on(
+                genes.add_annotator(anno)
+            )
+        )
 
     def register_qc_alignment_stats(self):
         output_filename = self.result_dir / ".." / "alignment_statistics.png"
-        try:
-            q = get_qc(output_filename)
-        except KeyError:
 
-            class AlignmentStatQC:
-                def __init__(self):
-                    self.lanes = set()
-
-                def get_qc_job(self):
-                    def calc():
-                        parts = []
-                        for l in self.lanes:
-                            p = l.get_alignment_stats()
-                            parts.append(
-                                pd.DataFrame(
-                                    {
-                                        "what": list(p.keys()),
-                                        "count": list(p.values()),
-                                        "sample": l.name,
-                                    }
-                                )
-                            )
-                        return pd.concat(parts)
-
-                    def plot(df):
-                        return (
-                            dp(df)
-                            .p9()
-                            .theme_bw()
-                            .annotation_stripes()
-                            .add_bar(
-                                "sample",
-                                "count",
-                                fill="what",
-                                position="stack",
-                                stat="identity",
-                            )
-                        )
-
-                    return ppg.PlotJob(output_filename, calc, plot).depends_on(
-                        [x.load() for x in self.lanes]
+        def calc_and_plot(output_filename, lanes):
+            parts = []
+            for l in lanes:
+                p = l.get_alignment_stats()
+                parts.append(
+                    pd.DataFrame(
+                        {
+                            "what": list(p.keys()),
+                            "count": list(p.values()),
+                            "sample": l.name,
+                        }
                     )
+                )
+            df = pd.concat(parts)
+            return (
+                dp(df)
+                .p9()
+                .theme_bw()
+                .annotation_stripes()
+                .add_bar(
+                    "sample", "count", fill="what", position="stack", stat="identity"
+                )
+                .render(output_filename)
+            )
 
-            q = AlignmentStatQC()
-            register_qc(output_filename, q)
-        q.lanes.add(self)
+        return register_qc(QCCollectingJob(output_filename, calc_and_plot).depends_on(
+            self.load()
+        ).add(self))  # since everybody says self.load, we get them all
 
     def register_qc_subchromosomal(self):
         """Subchromosom distribution plot - good to detect amplified regions
@@ -489,121 +462,113 @@ class AlignedSample:
                         )
                 return result
 
-        def build():
-            def calc():
-                from mbf_bam import count_reads_unstranded
+        def calc():
+            from mbf_bam import count_reads_unstranded
 
-                interval_strategy = IntervalStrategyWindows(250_000)
-                intervals = interval_strategy._get_interval_tuples_by_chr(self.genome)
+            interval_strategy = IntervalStrategyWindows(250_000)
+            intervals = interval_strategy._get_interval_tuples_by_chr(self.genome)
 
-                bam_filename, bam_index_name = self.get_bam_names()
-                counts = count_reads_unstranded(
-                    bam_filename,
-                    bam_index_name,
-                    intervals,
-                    intervals,
-                    each_read_counts_once=True,
-                )
-                true_chromosomes = set(self.genome.get_true_chromosomes())
-                result = {"chr": [], "window": [], "count": []}
-                for key, count in counts.items():
-                    if not key.startswith("_"):
-                        chr, window = key.split("_", 2)
-                        if chr in true_chromosomes:  # pragma: no branch
-                            window = int(window)
-                            result["chr"].append(chr)
-                            result["window"].append(window)
-                            result["count"].append(count)
-                return pd.DataFrame(result)
+            bam_filename, bam_index_name = self.get_bam_names()
+            counts = count_reads_unstranded(
+                bam_filename,
+                bam_index_name,
+                intervals,
+                intervals,
+                each_read_counts_once=True,
+            )
+            true_chromosomes = set(self.genome.get_true_chromosomes())
+            result = {"chr": [], "window": [], "count": []}
+            for key, count in counts.items():
+                if not key.startswith("_"):
+                    chr, window = key.split("_", 2)
+                    if chr in true_chromosomes:  # pragma: no branch
+                        window = int(window)
+                        result["chr"].append(chr)
+                        result["window"].append(window)
+                        result["count"].append(count)
+            return pd.DataFrame(result)
 
-            def plot(df):
-                return (
-                    dp(df)
-                    .p9()
-                    .theme_bw()
-                    .add_line("window", "count")
-                    .scale_y_log10()
-                    .facet_wrap("chr", scales="free", ncol=1)
-                    .title(self.name)
-                    .render(
-                        output_filename,
-                        width=6,
-                        height=2 + len(df["chr"].unique()) * 0.75,
-                    )
-                )
-
+        def plot(df):
             return (
-                ppg.PlotJob(output_filename, calc, plot)
-                .depends_on(self.load())
-                .use_cores(-1)
+                dp(df)
+                .p9()
+                .theme_bw()
+                .add_line("window", "count")
+                .scale_y_log10()
+                .facet_wrap("chr", scales="free", ncol=1)
+                .title(self.name)
+                .render(
+                    output_filename, width=6, height=2 + len(df["chr"].unique()) * 0.75
+                )
             )
 
-        return register_qc(output_filename, QCCallback(build))
+        return register_qc(
+            ppg.PlotJob(output_filename, calc, plot)
+            .depends_on(self.load())
+            .use_cores(-1)
+        )
 
     def register_qc_splicing(self):
         """How many reads were spliced? How many of those splices were known splice sites,
         how many were novel"""
         output_filename = self.result_dir / "splice_sites.png"
 
-        def build():
-            def calc():
-                from mbf_bam import count_introns
+        def calc():
+            from mbf_bam import count_introns
 
-                bam_filename, bam_index_name = self.get_bam_names()
-                counts_per_chromosome = count_introns(bam_filename, bam_index_name)
-                known_splice_sites_by_chr = {
-                    chr: set() for chr in self.genome.get_chromosome_lengths()
-                }
-                for gene in self.genome.genes.values():
-                    for start, stop in zip(*gene.introns):
-                        known_splice_sites_by_chr[gene.chr].add((start, stop))
-                total_counts = collections.Counter()
-                known_count = 0
-                unknown_count = 0
-                for chr, counts in counts_per_chromosome.items():
-                    for k, v in counts.items():
-                        if k[0] == 0xFFFFFFFF:
-                            intron_counts = 0xFFFFFFFF - k[1]
-                            total_counts[intron_counts] += v
+            bam_filename, bam_index_name = self.get_bam_names()
+            counts_per_chromosome = count_introns(bam_filename, bam_index_name)
+            known_splice_sites_by_chr = {
+                chr: set() for chr in self.genome.get_chromosome_lengths()
+            }
+            for gene in self.genome.genes.values():
+                for start, stop in zip(*gene.introns):
+                    known_splice_sites_by_chr[gene.chr].add((start, stop))
+            total_counts = collections.Counter()
+            known_count = 0
+            unknown_count = 0
+            for chr, counts in counts_per_chromosome.items():
+                for k, v in counts.items():
+                    if k[0] == 0xFFFFFFFF:
+                        intron_counts = 0xFFFFFFFF - k[1]
+                        total_counts[intron_counts] += v
+                    else:
+                        if k in known_splice_sites_by_chr[chr]:
+                            known_count += v
                         else:
-                            if k in known_splice_sites_by_chr[chr]:
-                                known_count += v
-                            else:
-                                unknown_count += v
-                result = {"side": [], "x": [], "count": []}
-                result["side"].append("splice sites")
-                result["x"].append("unknown")
-                result["count"].append(unknown_count)
-                result["side"].append("splice sites")
-                result["x"].append("known")
-                result["count"].append(known_count)
+                            unknown_count += v
+            result = {"side": [], "x": [], "count": []}
+            result["side"].append("splice sites")
+            result["x"].append("unknown")
+            result["count"].append(unknown_count)
+            result["side"].append("splice sites")
+            result["x"].append("known")
+            result["count"].append(known_count)
 
-                for x, count in total_counts.items():
-                    result["side"].append("reads with x splices")
-                    result["x"].append(x)
-                    result["count"].append(count)
+            for x, count in total_counts.items():
+                result["side"].append("reads with x splices")
+                result["x"].append(x)
+                result["count"].append(count)
 
-                return pd.DataFrame(result)
+            return pd.DataFrame(result)
 
-            def plot(df):
-                return (
-                    dp(df)
-                    .p9()
-                    .theme_bw()
-                    .add_bar("x", "count", stat="identity")
-                    .facet_wrap("side", scales="free", ncol=1)
-                    .title(self.name)
-                    .theme(panel_spacing_y=0.2)
-                    .render(output_filename)
-                )
-
+        def plot(df):
             return (
-                ppg.PlotJob(output_filename, calc, plot)
-                .depends_on(self.load())
-                .use_cores(-1)
+                dp(df)
+                .p9()
+                .theme_bw()
+                .add_bar("x", "count", stat="identity")
+                .facet_wrap("side", scales="free", ncol=1)
+                .title(self.name)
+                .theme(panel_spacing_y=0.2)
+                .render(output_filename)
             )
 
-        register_qc(output_filename, QCCallback(build))
+        return register_qc(
+            ppg.PlotJob(output_filename, calc, plot)
+            .depends_on(self.load())
+            .use_cores(-1)
+        )
 
 
 __all__ = [Sample, AlignedSample]
