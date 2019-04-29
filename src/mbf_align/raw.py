@@ -1,4 +1,5 @@
 import pypipegraph as ppg
+import shutil
 from pathlib import Path
 from .strategies import build_fastq_strategy
 from . import fastq2
@@ -118,13 +119,13 @@ class Sample:
                 def prep_aligner_input():
                     import shutil
                     self.fastq_processor.generate_aligner_input_paired(
-                        output_filenames[0] + '.temp',
-                        output_filenames[1] + '.temp',
+                        str(output_filenames[0]) + '.temp',
+                        str(output_filenames[1]) + '.temp',
                         input_filenames,
                         self.reverse_reads,
                     )
-                    shutil.move(output_filenames[0] + '.temp', output_filenames[0])
-                    shutil.move(output_filenames[1] + '.temp', output_filenames[1])
+                    shutil.move(str(output_filenames[0]) + ".temp", output_filenames[0])
+                    shutil.move(str(output_filenames[1]) + ".temp", output_filenames[1])
 
                 job = ppg.MultiTempFileGeneratingJob(
                     output_filenames, prep_aligner_input
@@ -140,17 +141,17 @@ class Sample:
                     import shutil
 
                     self.fastq_processor.generate_aligner_input(
-                        output_filenames[0] + '.temp',
+                        str(output_filenames[0]) + '.temp',
                         [x[0] for x in input_filenames],
                         self.reverse_reads,
                     )
                     self.fastq_processor.generate_aligner_input(
-                        output_filenames[1] + '.temp',
+                        str(output_filenames[1]) + '.temp',
                         [x[1] for x in input_filenames],
                         self.reverse_reads,
                     )
-                    shutil.move(output_filenames[0] + '.temp', output_filenames[0])
-                    shutil.move(output_filenames[1] + '.temp', output_filenames[1])
+                    shutil.move(str(output_filenames[0]) + ".temp", output_filenames[0])
+                    shutil.move(str(output_filenames[1]) + ".temp", output_filenames[1])
 
 
                 job = ppg.MultiTempFileGeneratingJob(
@@ -167,9 +168,9 @@ class Sample:
             def prep_aligner_input(output_filename):
                 import shutil
                 self.fastq_processor.generate_aligner_input(
-                    output_filename + '.temp', input_filenames, self.reverse_reads
+                    str(output_filename) + '.temp', input_filenames, self.reverse_reads
                 )
-                shutil.move(output_filename + '.temp', output_filename)
+                shutil.move(str(output_filename) + ".temp", output_filename)
 
             job = ppg.TempFileGeneratingJob(output_filenames[0], prep_aligner_input)
             job.depends_on(
@@ -213,7 +214,13 @@ class Sample:
     def align(self, aligner, genome, aligner_parameters):
         from .lanes import AlignedSample
 
-        output_dir = self.result_dir / "aligned" / aligner.name / genome.name
+        output_dir = (
+            Path("results")
+            / "aligned"
+            / ("%s_%s" % (aligner.name, aligner.version))
+            / genome.name
+            / self.name
+        )
         output_dir.mkdir(parents=True, exist_ok=True)
         output_filename = output_dir / (self.name + ".bam")
         input_job = self.prepare_input()
@@ -238,5 +245,7 @@ class Sample:
                 "aligner (%s).align_job should have added a parameter invariant for aligner parameters"
                 % aligner
             )
-        print("name raw", self.name)
-        return AlignedSample(self.name, alignment_job, genome, self.is_paired, self.vid)
+        return AlignedSample(
+            self.name, alignment_job, genome, self.is_paired, self.vid, output_dir,
+            aligner=aligner
+        )

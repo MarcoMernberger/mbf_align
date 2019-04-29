@@ -11,8 +11,12 @@
 import sys
 import subprocess
 import pathlib
-from pypipegraph.tests.fixtures import new_pipegraph, pytest_runtest_makereport  # noqa:F401
-from mbf_externals.tests.fixtures import local_store, global_store  # noqa:F401
+from pypipegraph.testing.fixtures import (  # noqa:F401
+    new_pipegraph,
+    pytest_runtest_makereport,
+)
+from mbf_externals.testing.fixtures import local_store, global_store  # noqa:F401
+from mbf_qualitycontrol.testing.fixtures import new_pipegraph_no_qc  # noqa:F401
 
 root = pathlib.Path(__file__).parent.parent
 print("root", root)

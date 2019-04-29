@@ -3,6 +3,7 @@ import shutil
 import requests
 import hashlib
 import pypipegraph as ppg
+from mbf_externals.util import download_file
 
 
 def build_fastq_strategy(input_strategy):
@@ -182,12 +183,8 @@ class FASTQsFromURLs(_FASTQsBase):
             def download(url=url, target_fn=target_fn):
                 Path(target_fn).parent.mkdir(exist_ok=True, parents=True)
                 target_fn.with_name(target_fn.name + ".url").write_text(url)
-                r = requests.get(url, stream=True)
-                if r.status_code != 200:
-                    raise ValueError(f"Error return on {url} {r.status_code}")
                 with open(str(target_fn) + "_temp", "wb") as op:
-                    for block in r.iter_content(1024 * 1024):
-                        op.write(block)
+                    download_file(url, op)
                 shutil.move(str(target_fn) + "_temp", target_fn)
 
             job = ppg.MultiFileGeneratingJob(
