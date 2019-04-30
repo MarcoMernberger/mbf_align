@@ -238,8 +238,8 @@ def CutAdapt(
             where,
             wildcard_ref=True,
             wildcard_query=False,
+            indel_cost = 50000  # we only want mismatches
         )
-        adapter_begin.indel_cost = 50000  # we only want mismatches
     else:
         if adapter_sequence_begin is None: # pragma: no branch
             adapter_sequence_begin = 0
@@ -251,8 +251,8 @@ def CutAdapt(
             where,
             wildcard_ref=True,
             wildcard_query=False,
+            indel_cost = 50000  # we only want mismatches..
         )
-        adapter_end.indel_cost = 50000  # we only want mismatches..
     else:
         adapter_end = None
 
