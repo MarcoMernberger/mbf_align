@@ -425,6 +425,7 @@ class AlignedSample:
                 .add_bar(
                     "sample", "count", fill="what", position="stack", stat="identity"
                 )
+                .turn_x_axis_labels()
                 .render(output_filename)
             )
 
