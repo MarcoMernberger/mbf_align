@@ -692,3 +692,16 @@ ERR2223563	ftp.sra.ebi.ac.uk/vol1/fastq/ERR222/003/ERR2223563/ERR2223563_1.fastq
                 o.urls[1]
                 == "http://ftp.sra.ebi.ac.uk/vol1/fastq/ERR222/003/ERR2223563/ERR2223563_2.fastq.gz"
             )
+
+
+@pytest.mark.usefixtures("new_pipegraph")
+class TestSamplesQC:
+    def test_fastqc(self):
+        from mbf_qualitycontrol import get_qc_jobs
+
+        Sample(
+            "Sample_a", get_sample_data(Path("mbf_align/sample_a")), False, vid="VA000"
+        )
+        qc_jobs = list(get_qc_jobs())
+        assert len(qc_jobs) == 1
+        assert "results/lanes/Sample_a/FASTQC/sentinel.txt" in qc_jobs[0].filenames

@@ -1,5 +1,4 @@
 import pypipegraph as ppg
-import shutil
 from pathlib import Path
 from .strategies import build_fastq_strategy
 from . import fastq2
@@ -64,6 +63,7 @@ class Sample:
         self.result_dir = Path("results") / "lanes" / self.name
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.result_dir.mkdir(parents=True, exist_ok=True)
+        self.register_qc()
 
     def get_aligner_input_filenames(self):
         if self.is_paired:
@@ -118,9 +118,10 @@ class Sample:
 
                 def prep_aligner_input():
                     import shutil
+
                     self.fastq_processor.generate_aligner_input_paired(
-                        str(output_filenames[0]) + '.temp',
-                        str(output_filenames[1]) + '.temp',
+                        str(output_filenames[0]) + ".temp",
+                        str(output_filenames[1]) + ".temp",
                         input_filenames,
                         self.reverse_reads,
                     )
@@ -141,18 +142,17 @@ class Sample:
                     import shutil
 
                     self.fastq_processor.generate_aligner_input(
-                        str(output_filenames[0]) + '.temp',
+                        str(output_filenames[0]) + ".temp",
                         [x[0] for x in input_filenames],
                         self.reverse_reads,
                     )
                     self.fastq_processor.generate_aligner_input(
-                        str(output_filenames[1]) + '.temp',
+                        str(output_filenames[1]) + ".temp",
                         [x[1] for x in input_filenames],
                         self.reverse_reads,
                     )
                     shutil.move(str(output_filenames[0]) + ".temp", output_filenames[0])
                     shutil.move(str(output_filenames[1]) + ".temp", output_filenames[1])
-
 
                 job = ppg.MultiTempFileGeneratingJob(
                     output_filenames, prep_aligner_input
@@ -167,8 +167,9 @@ class Sample:
 
             def prep_aligner_input(output_filename):
                 import shutil
+
                 self.fastq_processor.generate_aligner_input(
-                    str(output_filename) + '.temp', input_filenames, self.reverse_reads
+                    str(output_filename) + ".temp", input_filenames, self.reverse_reads
                 )
                 shutil.move(str(output_filename) + ".temp", output_filename)
 
@@ -246,6 +247,27 @@ class Sample:
                 % aligner
             )
         return AlignedSample(
-            self.name, alignment_job, genome, self.is_paired, self.vid, output_dir,
-            aligner=aligner
+            self.name,
+            alignment_job,
+            genome,
+            self.is_paired,
+            self.vid,
+            output_dir,
+            aligner=aligner,
         )
+
+    def register_qc(self):
+        from mbf_qualitycontrol import qc_disabled
+
+        if not qc_disabled():
+            self.register_qc_fastqc()
+
+    def register_qc_fastqc(self):
+        from mbf_externals import FASTQC
+        from mbf_qualitycontrol import register_qc
+
+        a = FASTQC()
+        output_dir = self.result_dir / "FASTQC"
+        temp_job = self.prepare_input()
+        job = a.run(output_dir, temp_job.filenames)
+        return register_qc(job)
