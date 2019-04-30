@@ -699,9 +699,10 @@ class TestSamplesQC:
     def test_fastqc(self):
         from mbf_qualitycontrol import get_qc_jobs
 
-        Sample(
+        lane = Sample(
             "Sample_a", get_sample_data(Path("mbf_align/sample_a")), False, vid="VA000"
         )
         qc_jobs = list(get_qc_jobs())
         assert len(qc_jobs) == 1
         assert "results/lanes/Sample_a/FASTQC/sentinel.txt" in qc_jobs[0].filenames
+        assert lane.prepare_input() in qc_jobs[0].prerequisites

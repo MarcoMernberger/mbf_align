@@ -270,4 +270,4 @@ class Sample:
         output_dir = self.result_dir / "FASTQC"
         temp_job = self.prepare_input()
         job = a.run(output_dir, temp_job.filenames)
-        return register_qc(job)
+        return register_qc(job.depends_on(self.prepare_input()))

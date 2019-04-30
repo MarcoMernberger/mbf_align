@@ -429,9 +429,11 @@ class AlignedSample:
                 .render(output_filename)
             )
 
-        return register_qc(QCCollectingJob(output_filename, calc_and_plot).depends_on(
-            self.load()
-        ).add(self))  # since everybody says self.load, we get them all
+        return register_qc(
+            QCCollectingJob(output_filename, calc_and_plot)
+            .depends_on(self.load())
+            .add(self)
+        )  # since everybody says self.load, we get them all
 
     def register_qc_subchromosomal(self):
         """Subchromosom distribution plot - good to detect amplified regions
@@ -490,17 +492,21 @@ class AlignedSample:
             return pd.DataFrame(result)
 
         def plot(df):
+            import natsort
             return (
                 dp(df)
+                .categorize("chr", natsort.natsorted(X["chr"].unique()))
                 .p9()
                 .theme_bw()
-                .add_line("window", "count")
+                .add_line("window", "count", _alpha=0.3)
                 .scale_y_log10()
                 .facet_wrap("chr", scales="free", ncol=1)
+                .hide_x_axis_labels()
                 .title(self.name)
-                .render(
-                    output_filename, width=6, height=2 + len(df["chr"].unique()) * 0.75
+                .render_args(
+                    width=6, height=2 + len(df["chr"].unique()) * 1, limitsize=False
                 )
+                .pd
             )
 
         return register_qc(
