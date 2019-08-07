@@ -126,6 +126,30 @@ class FASTQsFromFolder(_FASTQsBase):
         return f"FASTQsFromFolder({self.folder})"
 
 
+class FASTQsFromPrefix(_FASTQsBase):
+    """Discover fastqs(.gz) in a single folder,
+    which match Prefix.* (* is added by the Strategie),
+    with automatic pairing based on R1/R2
+    """
+
+    def __init__(self, prefix):
+        self.folder = Path(prefix).parent
+        self.prefix = str(Path(prefix).name)
+        if not self.folder.exists():
+            raise IOError(f"folder {self.folder} not found")
+        if not any(self.folder.glob(self.prefix + "*.fastq.gz")) and not any(
+            self.folder.glob(self.prefix + "*.fastq")
+        ):
+            raise ValueError(f"No {self.prefix}*.fastq or {self.prefix}*.fastq.gz in {self.folder} found")
+
+    def __call__(self):
+        fastqs = [x.resolve() for x in self.folder.glob(self.prefix + "*.fastq*")]
+        return self._parse_filenames(fastqs)
+
+    def __str__(self):
+        return f"FASTQsFromPrefix({self.prefix})"
+
+
 class FASTQsFromJob(_FASTQsBase):
     def __init__(self, job):
         self.dependencies = job
