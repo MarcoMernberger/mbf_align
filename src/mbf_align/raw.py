@@ -212,7 +212,7 @@ class Sample:
 
         return ppg.MultiFileGeneratingJob(output_names, do_store).depends_on(temp_job)
 
-    def align(self, aligner, genome, aligner_parameters):
+    def align(self, aligner, genome, aligner_parameters, name=None):
         from .lanes import AlignedSample
 
         output_dir = (
@@ -247,7 +247,7 @@ class Sample:
                 % aligner
             )
         return AlignedSample(
-            self.name,
+            self.name if name is None else name,
             alignment_job,
             genome,
             self.is_paired,
