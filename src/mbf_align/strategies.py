@@ -128,7 +128,7 @@ class FASTQsFromFolder(_FASTQsBase):
 
 class FASTQsFromPrefix(_FASTQsBase):
     """Discover fastqs(.gz) in a single folder,
-    which match Prefix.* (* is added by the Strategie),
+    which match Prefix.* (* is added by the strategy),
     with automatic pairing based on R1/R2
     """
 
