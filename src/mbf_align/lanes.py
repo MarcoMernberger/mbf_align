@@ -154,6 +154,34 @@ class AlignedSample:
         """How many unmapped entrys are in the bam?"""
         return self._parse_idxstat()[1]
 
+    def substract(self, new_name, other_alignment):
+        """Filter all reads present (by name) in other_alignment from this one.
+        Probably only useful for single end data.
+        """
+        result_dir = self.result_dir / ".." / new_name
+        bam_filename = result_dir / (new_name + ".bam")
+
+        def substract():
+            import mbf_bam
+
+            mbf_bam.substract_bam(
+                str(bam_filename),
+                str(self.get_bam_names()[0]),
+                str(other_alignment.get_bam_names()[0]),
+            )
+
+        alignment_job = ppg.FileGeneratingJob(bam_filename, substract).depends_on(
+            other_alignment.load(), self.load()
+        )
+        return AlignedSample(
+            new_name,
+            alignment_job,
+            self.genome,
+            self.is_paired,
+            [self.vid, "-", other_alignment.vid],
+            result_dir=result_dir,
+        )
+
     def get_alignment_stats(self):
         if self.aligner is not None and hasattr(self.aligner, "get_alignment_stats"):
             return self.aligner.get_alignment_stats(Path(self.bam_filename))
@@ -427,6 +455,7 @@ class AlignedSample:
                 )
                 .title(lanes[0].genome.name)
                 .turn_x_axis_labels()
+                .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
                 .render_args(width=len(parts) * 0.2 + 1, height=5)
                 .render(output_filename)
             )
@@ -485,7 +514,10 @@ class AlignedSample:
             result = {"chr": [], "window": [], "count": []}
             for key, count in counts.items():
                 if not key.startswith("_"):
-                    chr, window = key.split("_", 2)
+                    # must handle both 2R_1234
+                    # and Unmapped_scaffold_29_D1705_1234
+                    *c, window = key.split("_")
+                    chr = "_".join(c)
                     if chr in true_chromosomes:  # pragma: no branch
                         window = int(window)
                         result["chr"].append(chr)
@@ -495,6 +527,7 @@ class AlignedSample:
 
         def plot(df):
             import natsort
+
             return (
                 dp(df)
                 .categorize("chr", natsort.natsorted(X["chr"].unique()))
