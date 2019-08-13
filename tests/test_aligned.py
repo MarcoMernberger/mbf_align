@@ -139,15 +139,24 @@ class TestAligned:
             False,
             "AA123",
         )  # index creation is automatic
+        lane3_subset = mbf_align.AlignedSample(
+            "test_lane3_subset",
+            get_sample_data(Path("mbf_align/chipseq_chr22_subset.bam")),
+            genome,
+            False,
+            "AA123",
+        )  # index creation is automatic
 
         lane_empty = lane.substract("empty", lane2)
         lane_full = lane.substract("full", lane3)
+        lane_some = lane3.substract('lane3--', lane3_subset)
         ppg.run_pipegraph()
         assert Path(lane_empty.get_bam_names()[1]).exists()
         assert Path(lane_full.get_bam_names()[1]).exists()
         assert lane_empty.mapped_reads() == 0
         assert lane_full.mapped_reads() == lane.mapped_reads()
         assert lane.mapped_reads() != 0
+        assert lane_some.mapped_reads() == lane3.mapped_reads() - lane3_subset.mapped_reads()
 
 
 @pytest.mark.usefixtures("new_pipegraph")
