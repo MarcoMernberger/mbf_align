@@ -238,6 +238,7 @@ class AlignedSample:
             )
 
         def plot(df):
+            import numpy as np
             unique_count = df["Count"].sum()
             total_count = (df["Count"] * df["Repetition count"]).sum()
             pcb = float(unique_count) / total_count
@@ -259,7 +260,9 @@ class AlignedSample:
                 .theme_bw()
                 .add_point("Repetition count", "Count")
                 .add_line("Repetition count", "Count")
-                .scale_y_continuous(trans="log2")
+                .scale_y_continuous(trans="log2",
+                                    breaks = [2**x for x in range(1, 24)],
+                                    labels = lambda x: ["2^%0.f" % np.log(xs) for xs in x])
                 .title(title)
                 .pd
             )
@@ -403,6 +406,7 @@ class AlignedSample:
                 )
                 .p9()
                 .add_bar("sample", "count", fill="what", position="dodge")
+                .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
                 .turn_x_axis_labels()
                 .pd
             )
@@ -433,6 +437,7 @@ class AlignedSample:
                 .theme_bw()
                 .annotation_stripes()
                 .add_bar("biotype", "read count", stat="identity")
+                .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
                 # .turn_x_axis_labels()
                 .coord_flip()
                 .title(self.name)
@@ -622,6 +627,7 @@ class AlignedSample:
                 .theme_bw()
                 .add_bar("x", "count", stat="identity")
                 .facet_wrap("side", scales="free", ncol=1)
+                .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
                 .title(self.name)
                 .theme(panel_spacing_y=0.2)
                 .render(output_filename)
