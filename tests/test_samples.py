@@ -11,6 +11,7 @@ from mbf_align import (
     FASTQsFromJob,
     FASTQsFromURLs,
     FASTQsFromAccession,
+    FASTQsFromPrefix,
     build_fastq_strategy,
 )
 from mbf_align import Sample
@@ -105,6 +106,27 @@ def test_FASTQsFromFolder_pairing_files_fails2():
     o = FASTQsFromFolder(folder)
     with pytest.raises(ValueError):
         o()
+
+
+def test_FASTQsFromPrefix():
+    fn1 = Path(get_sample_data(Path("mbf_align/sample_d") / "a_R1_.fastq.gz"))
+    fn2 = Path(get_sample_data(Path("mbf_align/sample_d") / "a_R2_.fastq.gz"))
+    fn_prefix = Path(get_sample_data(Path("mbf_align/sample_d") / "a"))
+    o = FASTQsFromPrefix(fn_prefix)
+    str(o)
+    assert o() == [(fn1.resolve(), fn2.resolve())]
+
+
+def test_FASTQsFromPrefix_raises_on_non_existant():
+    fn_prefix = Path("/shu/sha")
+    with pytest.raises(IOError):
+        FASTQsFromPrefix(fn_prefix)
+
+
+def test_FASTQsFromPrefix_raises_on_non_found():
+    fn_prefix = Path(get_sample_data(Path("mbf_align/sample_d") / "x"))
+    with pytest.raises(ValueError):
+        FASTQsFromPrefix(fn_prefix)
 
 
 @pytest.mark.usefixtures("new_pipegraph_no_qc")

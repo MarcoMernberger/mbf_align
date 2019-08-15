@@ -154,6 +154,55 @@ class AlignedSample:
         """How many unmapped entrys are in the bam?"""
         return self._parse_idxstat()[1]
 
+    def subtract(self, new_name, other_alignment):
+        """Filter all reads present (by name) in other_alignment from this one.
+        Probably only useful for single end data.
+        """
+        result_dir = self.result_dir / ".." / new_name
+        bam_filename = result_dir / (new_name + ".bam")
+
+        def inner_subtract():
+            import mbf_bam
+
+            mbf_bam.subtract_bam(
+                str(bam_filename),
+                str(self.get_bam_names()[0]),
+                str(other_alignment.get_bam_names()[0]),
+            )
+
+        alignment_job = ppg.FileGeneratingJob(bam_filename, inner_subtract).depends_on(
+            other_alignment.load(), self.load()
+        )
+
+        if self.vid == other_alignment.vid:
+            vid = self.vid
+        else:
+            vid = [self.vid, "-", other_alignment.vid]
+        new_lane = AlignedSample(
+            new_name,
+            alignment_job,
+            self.genome,
+            self.is_paired,
+            vid,
+            result_dir=result_dir,
+        )
+
+        def write_delta(of):
+            was = self.mapped_reads()
+            now = new_lane.mapped_reads()
+            delta = was - now
+            Path(of).write_text(
+                f"Lost {delta} reads from {was} ({delta / was * 100:.2f}%)"
+            )
+
+        delta_job = ppg.FileGeneratingJob(
+            new_lane.result_dir / "subtract_delta.txt", write_delta
+        ).depends_on(new_lane.load())
+        new_lane.subtract_delta_job = delta_job
+        new_lane.parent = self
+        new_lane.register_qc_alignment_subtract()
+        return new_lane
+
     def get_alignment_stats(self):
         if self.aligner is not None and hasattr(self.aligner, "get_alignment_stats"):
             return self.aligner.get_alignment_stats(Path(self.bam_filename))
@@ -189,6 +238,7 @@ class AlignedSample:
             )
 
         def plot(df):
+            import numpy as np
             unique_count = df["Count"].sum()
             total_count = (df["Count"] * df["Repetition count"]).sum()
             pcb = float(unique_count) / total_count
@@ -210,7 +260,9 @@ class AlignedSample:
                 .theme_bw()
                 .add_point("Repetition count", "Count")
                 .add_line("Repetition count", "Count")
-                .scale_y_continuous(trans="log2")
+                .scale_y_continuous(trans="log2",
+                                    breaks = [2**x for x in range(1, 24)],
+                                    labels = lambda x: ["2^%0.f" % np.log(xs) for xs in x])
                 .title(title)
                 .pd
             )
@@ -354,6 +406,7 @@ class AlignedSample:
                 )
                 .p9()
                 .add_bar("sample", "count", fill="what", position="dodge")
+                .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
                 .turn_x_axis_labels()
                 .pd
             )
@@ -384,6 +437,7 @@ class AlignedSample:
                 .theme_bw()
                 .annotation_stripes()
                 .add_bar("biotype", "read count", stat="identity")
+                .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
                 # .turn_x_axis_labels()
                 .coord_flip()
                 .title(self.name)
@@ -425,7 +479,9 @@ class AlignedSample:
                 .add_bar(
                     "sample", "count", fill="what", position="stack", stat="identity"
                 )
+                .title(lanes[0].genome.name)
                 .turn_x_axis_labels()
+                .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
                 .render_args(width=len(parts) * 0.2 + 1, height=5)
                 .render(output_filename)
             )
@@ -484,7 +540,10 @@ class AlignedSample:
             result = {"chr": [], "window": [], "count": []}
             for key, count in counts.items():
                 if not key.startswith("_"):
-                    chr, window = key.split("_", 2)
+                    # must handle both 2R_1234
+                    # and Unmapped_scaffold_29_D1705_1234
+                    *c, window = key.split("_")
+                    chr = "_".join(c)
                     if chr in true_chromosomes:  # pragma: no branch
                         window = int(window)
                         result["chr"].append(chr)
@@ -494,7 +553,7 @@ class AlignedSample:
 
         def plot(df):
             import natsort
-            df["count"] = df["count"]+1
+
             return (
                 dp(df)
                 .categorize("chr", natsort.natsorted(X["chr"].unique()))
@@ -568,6 +627,7 @@ class AlignedSample:
                 .theme_bw()
                 .add_bar("x", "count", stat="identity")
                 .facet_wrap("side", scales="free", ncol=1)
+                .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
                 .title(self.name)
                 .theme(panel_spacing_y=0.2)
                 .render(output_filename)
@@ -578,6 +638,51 @@ class AlignedSample:
             .depends_on(self.load())
             .use_cores(-1)
         )
+
+    def register_qc_alignment_subtract(self):
+        """Plot for lane.subtract to see how much you lost.
+
+        Called by lane.subtract on the new lane.
+        """
+        output_filename = self.result_dir / ".." / "alignment_substract.png"
+
+        def calc_and_plot(output_filename, lanes):
+            parts = []
+            for l in lanes:
+                was = l.parent.mapped_reads()
+                now = l.mapped_reads()
+                lost = was - now
+                parts.append(
+                    pd.DataFrame(
+                        {
+                            "what": ["kept", "lost"],
+                            "count": [now, lost],
+                            "sample": l.name,
+                        }
+                    )
+                )
+            df = pd.concat(parts)
+            return (
+                dp(df)
+                .categorize("what", ["lost", "kept"])
+                .p9()
+                .theme_bw()
+                .annotation_stripes()
+                .add_bar(
+                    "sample", "count", fill="what", position="stack", stat="identity"
+                )
+                .title(lanes[0].genome.name + " substraction")
+                .turn_x_axis_labels()
+                .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
+                .render_args(width=len(parts) * 0.2 + 1, height=5)
+                .render(output_filename)
+            )
+
+        return register_qc(
+            QCCollectingJob(output_filename, calc_and_plot)
+            .depends_on(self.load())
+            .add(self)
+        )  # since everybody says self.load, we get them all
 
 
 __all__ = [Sample, AlignedSample]

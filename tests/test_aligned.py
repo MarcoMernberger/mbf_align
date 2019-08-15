@@ -114,6 +114,57 @@ class TestAligned:
         assert Path("sample.bam").exists()
         assert Path("sample.bam.bai").exists()
 
+    def test_subtraction_by_read(self):
+        from mbf_sampledata import get_human_22_fake_genome
+
+        genome = get_human_22_fake_genome()
+        lane = mbf_align.AlignedSample(
+            "test_lane",
+            get_sample_data(Path("mbf_align/rnaseq_spliced_chr22.bam")),
+            genome,
+            False,
+            "AA123",
+        )  # index creation is automatic
+        lane2 = mbf_align.AlignedSample(
+            "test_lane2",
+            get_sample_data(Path("mbf_align/rnaseq_spliced_chr22.bam")),
+            genome,
+            False,
+            "AA124",
+        )  # index creation is automatic
+        lane3 = mbf_align.AlignedSample(
+            "test_lane3",
+            get_sample_data(Path("mbf_align/chipseq_chr22.bam")),
+            genome,
+            False,
+            "AA123",
+        )  # index creation is automatic
+        lane3_subset = mbf_align.AlignedSample(
+            "test_lane3_subset",
+            get_sample_data(Path("mbf_align/chipseq_chr22_subset.bam")),
+            genome,
+            False,
+            "AA123",
+        )  # index creation is automatic
+
+        lane_empty = lane.subtract("empty", lane2)
+        lane_full = lane.subtract("full", lane3)
+        lane_some = lane3.subtract("lane3--", lane3_subset)
+        qc_job = lane_some.register_qc_alignment_subtract()
+        prune_qc(lambda job: job == qc_job)
+        ppg.run_pipegraph()
+        assert Path(lane_empty.get_bam_names()[1]).exists()
+        assert Path(lane_full.get_bam_names()[1]).exists()
+        assert lane_empty.mapped_reads() == 0
+        assert lane_full.mapped_reads() == lane.mapped_reads()
+        assert lane.mapped_reads() != 0
+        assert (
+            lane_some.mapped_reads()
+            == lane3.mapped_reads() - lane3_subset.mapped_reads()
+        )
+        assert lane3_subset.mapped_reads()  # make sure there was something to subtract
+        assert_image_equal(qc_job.filenames[0])
+
 
 @pytest.mark.usefixtures("new_pipegraph")
 class TestQualityControl:
