@@ -494,6 +494,7 @@ class AlignedSample:
 
         def plot(df):
             import natsort
+            df["count"] = df["count"]+1
             return (
                 dp(df)
                 .categorize("chr", natsort.natsorted(X["chr"].unique()))

@@ -247,7 +247,7 @@ class Sample:
                 % aligner
             )
         return AlignedSample(
-            self.name,
+            f"{self.name}_{aligner.name}",
             alignment_job,
             genome,
             self.is_paired,
