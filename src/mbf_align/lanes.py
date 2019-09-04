@@ -239,6 +239,7 @@ class AlignedSample:
 
         def plot(df):
             import numpy as np
+
             unique_count = df["Count"].sum()
             total_count = (df["Count"] * df["Repetition count"]).sum()
             pcb = float(unique_count) / total_count
@@ -260,9 +261,11 @@ class AlignedSample:
                 .theme_bw()
                 .add_point("Repetition count", "Count")
                 .add_line("Repetition count", "Count")
-                .scale_y_continuous(trans="log2",
-                                    breaks = [2**x for x in range(1, 24)],
-                                    labels = lambda x: ["2^%0.f" % np.log(xs) for xs in x])
+                .scale_y_continuous(
+                    trans="log2",
+                    breaks=[2 ** x for x in range(1, 24)],
+                    labels=lambda x: ["2^%0.f" % np.log(xs) for xs in x],
+                )
                 .title(title)
                 .pd
             )
