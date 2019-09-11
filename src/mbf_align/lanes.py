@@ -299,7 +299,7 @@ class AlignedSample:
                         coll[g.chr].append(
                             (start, stop, 0b0101 if g.strand == 1 else 0b0110)
                         )
-                    for start, stop in zip(*g.introns):
+                    for start, stop in zip(*g.introns_strict):
                         coll[g.chr].append(
                             (start, stop, 0b1001 if g.strand == 1 else 0b1010)
                         )
@@ -474,6 +474,7 @@ class AlignedSample:
                     )
                 )
             df = pd.concat(parts)
+            print(df)
             return (
                 dp(df)
                 .p9()
@@ -557,6 +558,9 @@ class AlignedSample:
         def plot(df):
             import natsort
 
+            df[
+                "count"
+            ] += 1  # so we don't crash in the log scale if all values are 0 for a chr
             return (
                 dp(df)
                 .categorize("chr", natsort.natsorted(X["chr"].unique()))
@@ -593,7 +597,7 @@ class AlignedSample:
                 chr: set() for chr in self.genome.get_chromosome_lengths()
             }
             for gene in self.genome.genes.values():
-                for start, stop in zip(*gene.introns):
+                for start, stop in zip(*gene.introns_all):
                     known_splice_sites_by_chr[gene.chr].add((start, stop))
             total_counts = collections.Counter()
             known_count = 0
