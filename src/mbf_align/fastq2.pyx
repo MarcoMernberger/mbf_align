@@ -339,6 +339,34 @@ class UMIExtract(object):
         return []
 
 
+class QuantSeqFWD(object):
+    """Take a set of Lexogen QuantSeq FWD
+    fastqs, extract the UMIs (into the name),
+    throw away the next 12b, and the last bp
+
+    """
+
+    def generate_aligner_input(
+        self, output_filename, list_of_fastqs, reverse_reads, read_creator="fastq"
+    ):
+        n = 6
+        our_iter = get_iterator(read_creator)
+        with open(output_filename, "wb") as op:
+            if not reverse_reads:
+                for fn in list_of_fastqs:
+                    for seq, qual, name in our_iter(fn, False):
+                        umi = seq[:n]
+                        seq = seq[n + 12 : -1]
+                        qual = qual[n + 12 : -1]
+                        name += b"_" + umi
+                        op.write(b"@" + name + b"\n" + seq + b"\n+\n" + qual + b"\n")
+            else:
+                raise NotImplementedError("implement for reverse reads")
+
+    def get_dependencies(self, output_filename):
+        return []
+
+
 # TODO: KHmer Filter
 
 # TODO: alternative read generating iterators (eland, SRA, fasta, SOAP, bedlane, bednamelane, geraldlane, ELANDLaneIgnoringQualities, Seqlane, MixedFormatLane, fastq igonring qualities  )
