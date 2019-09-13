@@ -70,7 +70,7 @@ class Straight(object):
                     for block in _common.read_file_blocked(fn, 20 * 1024 * 1024):
                         op.write(block)
 
-    def get_dependecies(self, output_filename):
+    def get_dependencies(self, output_filename):
         return []
 
 
@@ -95,7 +95,7 @@ class Filtered(Straight):
                     if self.filter_func(seq, qual, name):
                         op.write(b"@" + name + b"\n" + seq + b"\n+\n" + qual + b"\n")
 
-    def get_dependecies(self, output_filename):
+    def get_dependencies(self, output_filename):
         return [ppg.FunctionInvariant(output_filename + "_filter", self.filter_func)]
 
 
@@ -138,7 +138,7 @@ class Paired_Filtered(Straight):
                                 b"@" + name2 + b"\n" + seq2 + b"\n+\n" + qual2 + b"\n"
                             )
 
-    def get_dependecies(self, output_filenames):
+    def get_dependencies(self, output_filenames):
         return [
             ppg.FunctionInvariant(output_filenames[0] + "_filter", self.filter_func)
         ]
@@ -185,7 +185,7 @@ class QualityFilter(object):
                             )
                     op.write(b"@" + name + b"\n" + seq + b"\n+\n" + qual + b"\n")
 
-    def get_dependecies(self, output_filename):
+    def get_dependencies(self, output_filename):
         return [ppg.FunctionInvariant(output_filename + "_filter", self.filter_func)]
 
 
@@ -335,7 +335,7 @@ class UMIExtract(object):
             else:
                 raise NotImplementedError("implement for reverse reads")
 
-    def get_dependecies(self, output_filename):
+    def get_dependencies(self, output_filename):
         return []
 
 

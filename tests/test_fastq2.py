@@ -636,7 +636,7 @@ def test_filtered_depends_on_function_invariant(new_pipegraph):
         return True
 
     x = fastq2.Paired_Filtered(f)
-    deps = x.get_dependecies(["test_R1_.fastq", "test_R2_.fastq"])
+    deps = x.get_dependencies(["test_R1_.fastq", "test_R2_.fastq"])
     assert isinstance(deps[0], ppg.FunctionInvariant)
     assert "test_R1_.fastq" in deps[0].job_id
     assert deps[0].function is f
@@ -647,7 +647,7 @@ def test_filtered_paired_depends_on_function_invariant(new_pipegraph):
         return True
 
     x = fastq2.Filtered(f)
-    deps = x.get_dependecies("test.fastq")
+    deps = x.get_dependencies("test.fastq")
     assert isinstance(deps[0], ppg.FunctionInvariant)
     assert "test.fastq" in deps[0].job_id
     assert deps[0].function is f
@@ -658,7 +658,7 @@ def test_quality_filter_depends_on_function_invariant(new_pipegraph):
         return True
 
     x = fastq2.QualityFilter(f)
-    deps = x.get_dependecies("test.fastq")
+    deps = x.get_dependencies("test.fastq")
     assert isinstance(deps[0], ppg.FunctionInvariant)
     assert deps[0].function is f
 
@@ -748,6 +748,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
         with open("test_straight_copy.fastq", "wb") as op:
             op.write(test)
         x = fastq2.UMIExtract(3)
+        assert x.get_dependencies("test_straight_copy.out.fastq") == []
         x.generate_aligner_input(
             "test_straight_copy.out.fastq", ["test_straight_copy.fastq"], False
         )

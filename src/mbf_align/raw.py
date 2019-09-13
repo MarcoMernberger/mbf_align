@@ -132,7 +132,7 @@ class Sample:
                     output_filenames, prep_aligner_input
                 )
                 job.depends_on(
-                    self.fastq_processor.get_dependecies(
+                    self.fastq_processor.get_dependencies(
                         [str(x) for x in output_filenames]
                     )
                 )
@@ -158,10 +158,10 @@ class Sample:
                     output_filenames, prep_aligner_input
                 )
                 job.depends_on(
-                    self.fastq_processor.get_dependecies(str(output_filenames[0]))
+                    self.fastq_processor.get_dependencies(str(output_filenames[0]))
                 )
                 job.depends_on(
-                    self.fastq_processor.get_dependecies(str(output_filenames[1]))
+                    self.fastq_processor.get_dependencies(str(output_filenames[1]))
                 )
         else:
 
@@ -175,7 +175,7 @@ class Sample:
 
             job = ppg.TempFileGeneratingJob(output_filenames[0], prep_aligner_input)
             job.depends_on(
-                self.fastq_processor.get_dependecies(str(output_filenames[0]))
+                self.fastq_processor.get_dependencies(str(output_filenames[0]))
             )
 
         job.depends_on(
