@@ -330,8 +330,9 @@ class UMIExtract(object):
                         umi = seq[:n]
                         seq = seq[n:]
                         qual = qual[n:]
-                        name += b"_" + umi
-                        op.write(b"@" + name + b"\n" + seq + b"\n+\n" + qual + b"\n")
+                        name = name.split(b' ')
+                        name[0] += b"_" + umi
+                        op.write(b"@" + b' '.join(name) + b"\n" + seq + b"\n+\n" + qual + b"\n")
             else:
                 raise NotImplementedError("implement for reverse reads")
 
@@ -358,8 +359,9 @@ class QuantSeqFWD(object):
                         umi = seq[:n]
                         seq = seq[n + 12 : -1]
                         qual = qual[n + 12 : -1]
-                        name += b"_" + umi
-                        op.write(b"@" + name + b"\n" + seq + b"\n+\n" + qual + b"\n")
+                        name = name.split(b' ')
+                        name[0] += b"_" + umi
+                        op.write(b"@" + b' '.join(name) + b"\n" + seq + b"\n+\n" + qual + b"\n")
             else:
                 raise NotImplementedError("implement for reverse reads")
 
