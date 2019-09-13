@@ -38,7 +38,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
             )
             with open("test_straight_copy.out.fastq", "rb") as op:
                 was = op.read()
-                test == was
+                assert test == was
 
         finally:
             if os.path.exists("test_straight_copy.out.fastq"):
@@ -690,7 +690,9 @@ def test_read_creator_must_be_fastq_right_now(new_pipegraph):
 def test_quality_raises_on_0_return(new_pipegraph):
     with pytest.raises(ValueError):
         fastq2.QualityFilter(lambda qual, seq: 0).generate_aligner_input(
-            "test.fastq", [str(get_sample_data(Path("mbf_align/sample_a/a.fastq")))], False
+            "test.fastq",
+            [str(get_sample_data(Path("mbf_align/sample_a/a.fastq")))],
+            False,
         )
 
 
@@ -704,3 +706,55 @@ def test_cutadapt_raises_on_negative_adapter_sequences():
         fastq2.CutAdapt(-1, 5, True)
     with pytest.raises(ValueError):
         fastq2.CutAdapt(1, -5, True)
+
+
+def test_umi_extract():
+    test = b"""@SEQ_ID_1
+AATTTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
++
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+@SEQ_ID_2
+TATTTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
++
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+@SEQ_ID_2
+AAAATGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
++
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+@SEQ_ID_2
+CATTTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
++
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+"""
+    should = b"""@SEQ_ID_1_AAT
+TTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
++
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+@SEQ_ID_2_TAT
+TTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
++
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+@SEQ_ID_2_AAA
+ATGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
++
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+@SEQ_ID_2_CAT
+TTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
++
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+"""
+
+    try:
+        with open("test_straight_copy.fastq", "wb") as op:
+            op.write(test)
+        x = fastq2.UMIExtract(3)
+        x.generate_aligner_input(
+            "test_straight_copy.out.fastq", ["test_straight_copy.fastq"], False
+        )
+        with open("test_straight_copy.out.fastq", "rb") as op:
+            was = op.read()
+            assert should == was
+
+    finally:
+        if os.path.exists("test_straight_copy.out.fastq"):
+            os.unlink("test_straight_copy.out.fastq")

@@ -139,7 +139,9 @@ class Paired_Filtered(Straight):
                             )
 
     def get_dependecies(self, output_filenames):
-        return [ppg.FunctionInvariant(output_filenames[0] + "_filter", self.filter_func)]
+        return [
+            ppg.FunctionInvariant(output_filenames[0] + "_filter", self.filter_func)
+        ]
 
 
 class QualityFilter(object):
@@ -214,7 +216,7 @@ def CutAdapt(
                 % adapter_sequence_end
             )
     if isinstance(adapter_sequence_begin, int):
-        if adapter_sequence_begin > 0: # pragma: no branch
+        if adapter_sequence_begin > 0:  # pragma: no branch
             raise ValueError(
                 "adapter_sequence_begin needs to be a positive integer, was %s"
                 % adapter_sequence_begin
@@ -238,10 +240,10 @@ def CutAdapt(
             where,
             wildcard_ref=True,
             wildcard_query=False,
-            indel_cost = 50000  # we only want mismatches
+            indel_cost=50000,  # we only want mismatches
         )
     else:
-        if adapter_sequence_begin is None: # pragma: no branch
+        if adapter_sequence_begin is None:  # pragma: no branch
             adapter_sequence_begin = 0
         adapter_begin = None
     if isinstance(adapter_sequence_end, str):
@@ -251,7 +253,7 @@ def CutAdapt(
             where,
             wildcard_ref=True,
             wildcard_query=False,
-            indel_cost = 50000  # we only want mismatches..
+            indel_cost=50000,  # we only want mismatches..
         )
     else:
         adapter_end = None
@@ -304,6 +306,37 @@ def CutAdapt(
         return first_index, second_index
 
     return QualityFilter(qf)
+
+
+class UMIExtract(object):
+    """Take a set of fastqs 
+    and pull out the first N bases as an UMI,
+    attach _UMI to the name.
+
+    """
+
+    def __init__(self, umi_length):
+        self.umi_length = umi_length
+
+    def generate_aligner_input(
+        self, output_filename, list_of_fastqs, reverse_reads, read_creator="fastq"
+    ):
+        n = self.umi_length
+        our_iter = get_iterator(read_creator)
+        with open(output_filename, "wb") as op:
+            if not reverse_reads:
+                for fn in list_of_fastqs:
+                    for seq, qual, name in our_iter(fn, False):
+                        umi = seq[:n]
+                        seq = seq[n:]
+                        qual = qual[n:]
+                        name += b"_" + umi
+                        op.write(b"@" + name + b"\n" + seq + b"\n+\n" + qual + b"\n")
+            else:
+                raise NotImplementedError("implement for reverse reads")
+
+    def get_dependecies(self, output_filename):
+        return []
 
 
 # TODO: KHmer Filter
