@@ -154,30 +154,28 @@ class AlignedSample:
         """How many unmapped entrys are in the bam?"""
         return self._parse_idxstat()[1]
 
-    def subtract(self, new_name, other_alignment):
-        """Filter all reads present (by name) in other_alignment from this one.
+    def post_process(self, post_processor, new_name=None, result_dir=None):
+        """Postprocess this lane using a  mbf_align.postprocess.*
         Probably only useful for single end data.
         """
-        result_dir = self.result_dir / ".." / new_name
+        if new_name is None:
+            new_name = self.name + post_processor.name
+        if result_dir is None:
+            result_dir = (
+                self.result_dir / ".." / post_processor.result_folder_name / new_name
+            )
+        result_dir = Path(result_dir)
+        result_dir.mkdir(exist_ok=True, parents=True)
         bam_filename = result_dir / (new_name + ".bam")
 
-        def inner_subtract():
-            import mbf_bam
+        def inner():
+            post_processor.process(self.get_bam_names()[0], bam_filename)
 
-            mbf_bam.subtract_bam(
-                str(bam_filename),
-                str(self.get_bam_names()[0]),
-                str(other_alignment.get_bam_names()[0]),
-            )
-
-        alignment_job = ppg.FileGeneratingJob(bam_filename, inner_subtract).depends_on(
-            other_alignment.load(), self.load()
+        alignment_job = ppg.FileGeneratingJob(bam_filename, inner).depends_on(
+            self.load(), post_processor.get_dependencies()
         )
+        vid = post_processor.get_vid(self.vid)
 
-        if self.vid == other_alignment.vid:
-            vid = self.vid
-        else:
-            vid = [self.vid, "-", other_alignment.vid]
         new_lane = AlignedSample(
             new_name,
             alignment_job,
@@ -187,20 +185,11 @@ class AlignedSample:
             result_dir=result_dir,
         )
 
-        def write_delta(of):
-            was = self.mapped_reads()
-            now = new_lane.mapped_reads()
-            delta = was - now
-            Path(of).write_text(
-                f"Lost {delta} reads from {was} ({delta / was * 100:.2f}%)"
-            )
-
-        delta_job = ppg.FileGeneratingJob(
-            new_lane.result_dir / "subtract_delta.txt", write_delta
-        ).depends_on(new_lane.load())
-        new_lane.subtract_delta_job = delta_job
+        new_lane.post_processor_jobs = post_processor.further_jobs(
+            new_lane, self
+        )
         new_lane.parent = self
-        new_lane.register_qc_alignment_subtract()
+        new_lane.post_processor_qc_jobs = post_processor.register_qc(new_lane)
         return new_lane
 
     def get_alignment_stats(self):
@@ -645,51 +634,6 @@ class AlignedSample:
             .depends_on(self.load())
             .use_cores(-1)
         )
-
-    def register_qc_alignment_subtract(self):
-        """Plot for lane.subtract to see how much you lost.
-
-        Called by lane.subtract on the new lane.
-        """
-        output_filename = self.result_dir / ".." / "alignment_substract.png"
-
-        def calc_and_plot(output_filename, lanes):
-            parts = []
-            for l in lanes:
-                was = l.parent.mapped_reads()
-                now = l.mapped_reads()
-                lost = was - now
-                parts.append(
-                    pd.DataFrame(
-                        {
-                            "what": ["kept", "lost"],
-                            "count": [now, lost],
-                            "sample": l.name,
-                        }
-                    )
-                )
-            df = pd.concat(parts)
-            return (
-                dp(df)
-                .categorize("what", ["lost", "kept"])
-                .p9()
-                .theme_bw()
-                .annotation_stripes()
-                .add_bar(
-                    "sample", "count", fill="what", position="stack", stat="identity"
-                )
-                .title(lanes[0].genome.name + " substraction")
-                .turn_x_axis_labels()
-                .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
-                .render_args(width=len(parts) * 0.2 + 1, height=5)
-                .render(output_filename)
-            )
-
-        return register_qc(
-            QCCollectingJob(output_filename, calc_and_plot)
-            .depends_on(self.load())
-            .add(self)
-        )  # since everybody says self.load, we get them all
 
 
 __all__ = [Sample, AlignedSample]

@@ -147,11 +147,18 @@ class TestAligned:
             "AA123",
         )  # index creation is automatic
 
-        lane_empty = lane.subtract("empty", lane2)
-        lane_full = lane.subtract("full", lane3)
-        lane_some = lane3.subtract("lane3--", lane3_subset)
-        qc_job = lane_some.register_qc_alignment_subtract()
-        prune_qc(lambda job: job == qc_job)
+        lane_empty = lane.post_process(
+            mbf_align.post_process.SubtractOtherLane(lane2), new_name="empty"
+        )
+        lane_full = lane.post_process(
+            mbf_align.post_process.SubtractOtherLane(lane3), new_name="full"
+        )
+        lane_some = lane3.post_process(
+            mbf_align.post_process.SubtractOtherLane(lane3_subset),
+            result_dir="results/aligned/shu",
+        )
+        qc_jobs = [lane_some.post_processor_qc_jobs, lane_full.post_processor_qc_jobs]
+        prune_qc(lambda job: job in qc_jobs)
         ppg.run_pipegraph()
         assert Path(lane_empty.get_bam_names()[1]).exists()
         assert Path(lane_full.get_bam_names()[1]).exists()
@@ -163,7 +170,9 @@ class TestAligned:
             == lane3.mapped_reads() - lane3_subset.mapped_reads()
         )
         assert lane3_subset.mapped_reads()  # make sure there was something to subtract
-        assert_image_equal(qc_job.filenames[0])
+        assert "shu" in lane_some.get_bam_names()[0]
+        assert_image_equal(qc_jobs[0].filenames[0], '_result_dir')
+        assert_image_equal(qc_jobs[0].filenames[0])
 
 
 @pytest.mark.usefixtures("new_pipegraph")

@@ -760,6 +760,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
         if os.path.exists("test_straight_copy.out.fastq"):
             os.unlink("test_straight_copy.out.fastq")
 
+
 def test_quantseq_fwd():
     test = b"""@SEQ_ID_1
 AATTTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
