@@ -156,7 +156,8 @@ class AlignedSample:
 
     def post_process(self, post_processor, new_name=None, result_dir=None):
         """Postprocess this lane using a  mbf_align.postprocess.*
-        Probably only useful for single end data.
+        Ie. Turn a lane into a 'converted' lane.
+
         """
         if new_name is None:
             new_name = self.name + post_processor.name

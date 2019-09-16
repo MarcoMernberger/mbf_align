@@ -291,7 +291,7 @@ class FASTQsFromMRNAs(_FASTQsBase):
             with open(output_filename, "w") as op:
                 for tr in transcript_stable_ids:
                     seq = genome.transcripts[tr].mrna
-                    for ii in range(0, len(seq) - read_length):
+                    for ii in range(0, len(seq) - read_length + 1):
                         read_name = f"{tr}_{ii}"
                         read = seq[ii : ii + read_length]
                         op.write(f"@{read_name}\n{read}\n+\n{qual}\n")

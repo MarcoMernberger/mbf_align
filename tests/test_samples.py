@@ -13,11 +13,14 @@ from mbf_align import (
     FASTQsFromAccession,
     FASTQsFromPrefix,
     build_fastq_strategy,
+    FASTQsFromMRNAs,
 )
 from mbf_align import Sample
 from mbf_align import PairingError
 from mbf_align import fastq2
+from mbf_align._common import read_fastq_iterator
 from mbf_sampledata import get_sample_data
+import attr
 
 
 def test_FASTQsFromFile():
@@ -714,6 +717,37 @@ ERR2223563	ftp.sra.ebi.ac.uk/vol1/fastq/ERR222/003/ERR2223563/ERR2223563_1.fastq
                 o.urls[1]
                 == "http://ftp.sra.ebi.ac.uk/vol1/fastq/ERR222/003/ERR2223563/ERR2223563_2.fastq.gz"
             )
+
+    def test_fastqs_from_mrnas(self):
+        @attr.s
+        class Transcript:
+            transcript_stable_id = attr.ib()
+            mrna = attr.ib()
+
+        class FakeGenome:
+            name = "FakeGenome"
+
+            def download_genome(self):
+                return []
+
+            def job_genes(self):
+                return []
+
+            def job_transcripts(self):
+                return []
+
+            transcripts = {
+                "tr1": Transcript("gene1", "AGTC"),
+                "tr2": Transcript("gene1", "ACCA"),
+            }
+
+        o = FASTQsFromMRNAs(["tr1", "tr2"], FakeGenome(), 2)
+        target = o()[0][0]
+        ppg.run_pipegraph()
+        assert Path(target).exists()
+        with open(target) as r:
+            seqs, names, quals = zip(*read_fastq_iterator(r))
+        assert list(seqs) == ["AG", "GT", "TC", "AC", "CC", "CA"]
 
 
 @pytest.mark.usefixtures("new_pipegraph")

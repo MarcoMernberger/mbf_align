@@ -1,23 +1,27 @@
 import pypipegraph as ppg
 import pandas as pd
 from pathlib import Path
+import abc
 import dppd
 
 dp, X = dppd.dppd()
 from mbf_qualitycontrol import register_qc, QCCollectingJob
 
 
-class _PostProcessor:
+class _PostProcessor(abc.ABC):
     """Postprocess an AlignedSample into a new AlignedSample"""
 
-    def process(self, _input_bam_name, _output_bam_name):
-        raise NotImplementedError()
+    @abc.abstractmethod
+    def process(self, input_bam_name, output_bam_name):
+        pass  # pragma: no cover
 
+    @abc.abstractmethod
     def further_jobs(self, new_lane, parent_lane):
-        raise NotImplementedError()
+        pass  # pragma: no cover
 
+    @abc.abstractmethod
     def register_qc(self, new_lane):
-        raise NotImplementedError()
+        pass  # pragma: no cover
 
     def get_dependencies(self):
         return [ppg.FunctionInvariant(self.name + "_post_process", self.process)]
@@ -27,6 +31,10 @@ class _PostProcessor:
 
 
 class SubtractOtherLane(_PostProcessor):
+    """Subtract all reads (by name) matching in other_alignment.
+    Probably only useful for single end data.
+    """
+
     def __init__(self, other_alignment):
         self.other_alignment = other_alignment
         self.name = "_minus_" + other_alignment.name
