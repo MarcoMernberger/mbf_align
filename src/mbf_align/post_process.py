@@ -1,4 +1,5 @@
 import pypipegraph as ppg
+import subprocess
 import pandas as pd
 from pathlib import Path
 import abc
@@ -12,11 +13,11 @@ class _PostProcessor(abc.ABC):
     """Postprocess an AlignedSample into a new AlignedSample"""
 
     @abc.abstractmethod
-    def process(self, input_bam_name, output_bam_name):
+    def process(self, input_bam_name, output_bam_name, result_dir):
         pass  # pragma: no cover
 
-    @abc.abstractmethod
     def further_jobs(self, new_lane, parent_lane):
+        """further jobs beyond the processing - But  not qc, do that in register_qc"""
         pass  # pragma: no cover
 
     @abc.abstractmethod
@@ -25,6 +26,9 @@ class _PostProcessor(abc.ABC):
 
     def get_dependencies(self):
         return [ppg.FunctionInvariant(self.name + "_post_process", self.process)]
+
+    def get_parameters(self):
+        return ()
 
     def get_vid(self, source_vid):  # pragma: no cover
         return source_vid
@@ -40,7 +44,7 @@ class SubtractOtherLane(_PostProcessor):
         self.name = "_minus_" + other_alignment.name
         self.result_folder_name = "subtracted"
 
-    def process(self, input_bam_name, output_bam_name):
+    def process(self, input_bam_name, output_bam_name, result_dir):
         import mbf_bam
 
         mbf_bam.subtract_bam(
@@ -119,3 +123,52 @@ class SubtractOtherLane(_PostProcessor):
             .depends_on(new_lane.load())
             .add(new_lane)
         )  # since everybody says self.load, we get them all
+
+
+class UmiTools_Dedup(_PostProcessor):
+    def __init__(self, method="directional"):
+        self.method = method
+        allowed_methods = (
+            "unique",
+            "percentile",
+            ",cluster",
+            "adjacency",
+            "directional",
+        )
+        if method not in allowed_methods:
+            raise ValueError(f"Method not in allowed methods '{allowed_methods}'")
+        self.name = f"UMI-tools_dedup-{method}"
+        self.result_folder_name = self.name
+
+    def process(self, input_bam_name, output_bam_name, result_dir):
+        cmd = [
+            "umi_tools",
+            "dedup",
+            "-I",
+            str(input_bam_name.absolute().resolve()),
+            "-S",
+            str(output_bam_name.absolute().resolve()),
+            "-L",
+            str((result_dir / "umi_tools.log").absolute().resolve()),
+            "--output-stats",
+            str(result_dir / "umi_tools_stats"),
+            "--method",
+            self.method,
+        ]
+        import umi_tools.dedup
+
+        # we are running umitools within the slave process
+        # no real need to fork, and
+        # I couldn't get them to die on 'interactive abort'...
+        umi_tools.dedup.main(cmd)
+
+    def register_qc(self, new_lane):
+        pass  # pragma: no cover
+
+    def get_version(self):
+        return (
+            subprocess.check_output(["umi_tools", "--version"]).decode("utf-8").strip()
+        )
+
+    def get_parameters(self):
+        return (self.get_version(),)  # method is being taken care of by name

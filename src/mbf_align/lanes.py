@@ -160,20 +160,22 @@ class AlignedSample:
 
         """
         if new_name is None:
-            new_name = self.name + post_processor.name
+            new_name = self.name + '_' + post_processor.name
         if result_dir is None:
             result_dir = (
-                self.result_dir / ".." / post_processor.result_folder_name / new_name
+                self.result_dir / ".." / post_processor.result_folder_name / self.result_dir.name
             )
         result_dir = Path(result_dir)
         result_dir.mkdir(exist_ok=True, parents=True)
         bam_filename = result_dir / (new_name + ".bam")
 
-        def inner():
-            post_processor.process(self.get_bam_names()[0], bam_filename)
+        def inner(output_filename):
+            post_processor.process(Path(self.get_bam_names()[0]), Path(output_filename), result_dir)
 
         alignment_job = ppg.FileGeneratingJob(bam_filename, inner).depends_on(
-            self.load(), post_processor.get_dependencies()
+            self.load(),
+            post_processor.get_dependencies(),
+            ppg.ParameterInvariant(bam_filename, post_processor.get_parameters()),
         )
         vid = post_processor.get_vid(self.vid)
 
@@ -186,9 +188,7 @@ class AlignedSample:
             result_dir=result_dir,
         )
 
-        new_lane.post_processor_jobs = post_processor.further_jobs(
-            new_lane, self
-        )
+        new_lane.post_processor_jobs = post_processor.further_jobs(new_lane, self)
         new_lane.parent = self
         new_lane.post_processor_qc_jobs = post_processor.register_qc(new_lane)
         return new_lane
