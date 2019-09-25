@@ -202,7 +202,7 @@ class Sample:
             block_size = 10 * 1024 * 1024
             for input_filename, output_filename in pairs:
                 op = open(input_filename, "rb")
-                op_out = gzip.GzipFile(output_filename, "wb")
+                op_out = gzip.GzipFile(output_filename, "w")
                 f = op.read(block_size)
                 while f:
                     op_out.write(f)
