@@ -141,6 +141,59 @@ class Paired_Filtered(Straight):
     def get_dependecies(self, output_filenames):
         return [ppg.FunctionInvariant(output_filenames[0] + "_filter", self.filter_func)]
 
+class Paired_Filtered_Trimmed(Straight):
+    """Filter reads with a callback func that takes seq1,qual1, name1,
+    seq2, qual2, name2 and returns truncated reads/qualities
+    """
+    def __init__(self, filter_func):
+        Straight.__init__(self)
+        self.filter_func = filter_func
+
+    def generate_aligner_input_paired(
+        self,
+        output_filename1,
+        output_filename2,
+        list_of_fastq_pairs,
+        reverse_reads,
+        read_creator="fastq",
+    ):
+        if read_creator == "fastq":
+            our_iter = iterate_fastq
+        else:
+            raise ValueError("Invalid read creator")  # pragma: no cover
+        counter = 0
+        seen = 0
+        with open(output_filename1, "wb") as op1:
+            with open(output_filename2, "wb") as op2:
+                for fn1, fn2 in list_of_fastq_pairs:
+                    for tup in zip(
+                        our_iter(fn1, reverse_reads), our_iter(fn2, reverse_reads)
+                    ):
+                        seq1, qual1, name1 = tup[0]
+                        seq2, qual2, name2 = tup[1]
+                        seen += 1
+                        filtered = self.filter_func(
+                            seq1, qual1, name1, seq2, qual2, name2
+                        )
+                        if filtered is not None:
+                            s1, q1, n1, s2, q2, n2 = filtered
+                            if s1 is not None and s2 is not None:
+                                op1.write(
+                                    (
+                                        b"@" + n1 + b"\n" + s1 + b"\n+\n" + q1 + b"\n"
+                                    )
+                                )
+                                op2.write(
+                                    (
+                                        b"@" + n2 + b"\n" + s2 + b"\n+\n" + q2 + b"\n"
+                                    )
+                                )
+                                counter += 1
+
+    def get_dependecies(self, output_filenames):
+        return [
+            ppg.FunctionInvariant(output_filenames[0] + "_filter", self.filter_func)
+        ]
 
 class QualityFilter(object):
     """Support for old style quality filters.
