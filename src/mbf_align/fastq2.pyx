@@ -368,21 +368,23 @@ class UMIExtract(object):
 
     """
 
-    def __init__(self, umi_length):
+    def __init__(self, umi_length = 6, spacer = 4):
         self.umi_length = umi_length
+        self.spacer = spacer
 
     def generate_aligner_input(
         self, output_filename, list_of_fastqs, reverse_reads, read_creator="fastq"
     ):
         n = self.umi_length
+        spacer = self.spacer
         our_iter = get_iterator(read_creator)
         with open(output_filename, "wb") as op:
             if not reverse_reads:
                 for fn in list_of_fastqs:
                     for seq, qual, name in our_iter(fn, False):
                         umi = seq[:n]
-                        seq = seq[n:]
-                        qual = qual[n:]
+                        seq = seq[n + spacer:]
+                        qual = qual[n + spacer:]
                         name = name.split(b' ')
                         name[0] += b"_" + umi
                         op.write(b"@" + b' '.join(name) + b"\n" + seq + b"\n+\n" + qual + b"\n")
