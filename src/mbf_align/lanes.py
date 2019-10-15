@@ -466,9 +466,13 @@ class AlignedSample(_BamDerived):
                     )
                 )
             df = pd.concat(parts)
-            print(df)
+            order = sorted(df['what'].unique())
+            umrn= 'Uniquely mapped reads number'
+            if umrn in order:
+                order = [x for x in order if x != umrn]  +[umrn]
             return (
                 dp(df)
+                .categorize('what', order)
                 .p9()
                 .theme_bw()
                 .annotation_stripes()
