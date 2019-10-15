@@ -229,7 +229,7 @@ class Sample:
         alignment_job = aligner.align_job(
             input_job.filenames[0],
             input_job.filenames[1] if self.is_paired else None,
-            index_job.output_path,
+            index_job.output_path if hasattr(index_job, 'output_path') else index_job.filenames[0],
             output_filename,
             aligner_parameters if aligner_parameters else {},
         )
