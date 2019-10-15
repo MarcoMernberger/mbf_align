@@ -300,3 +300,45 @@ class FASTQsFromMRNAs(_FASTQsBase):
 
     def __call__(self):
         return self._parse_filenames(self.target_files)
+
+
+class FASTQsFromMRNAs_Deduplicated(_FASTQsBase):
+    """turn a bunch of mRNAs from the given genome
+    into a fully covering fastq at a given read length
+    For each possible read sequence, only the first instance is written out
+
+    (mRNA not cDNA, we don't use transcript.cdna but transcript.mrna)
+    """
+
+    def __init__(self, transcript_stable_ids, genome, read_length):
+        self.key = hashlib.md5(
+            f"{transcript_stable_ids} {genome.name} {read_length}".encode("utf-8")
+        ).hexdigest()
+        self.target_files = [str(Path(f"cache/FASTQsFromCDNAs/{self.key}.fastq"))]
+        self.jobs = self.build_file(
+            self.target_files[0], transcript_stable_ids, genome, read_length
+        )
+        self.dependencies = (
+            self.jobs
+        )  # no need for a ParameterInvariant, it's in the key
+
+    @staticmethod
+    def build_file(target_file, transcript_stable_ids, genome, read_length):
+        def build(output_filename):
+            Path(target_file).parent.mkdir(parents=True, exist_ok=True)
+            qual = "z" * read_length
+            seen = set()
+            with open(output_filename, "w") as op:
+                for tr in transcript_stable_ids:
+                    seq = genome.transcripts[tr].mrna
+                    for ii in range(0, len(seq) - read_length + 1):
+                        read = seq[ii : ii + read_length]
+                        if not read in seen:
+                            seen.add(read)
+                            read_name = f"{tr}_{ii}"
+                            op.write(f"@{read_name}\n{read}\n+\n{qual}\n")
+
+        return ppg.FileGeneratingJob(target_file, build)
+
+    def __call__(self):
+        return self._parse_filenames(self.target_files)

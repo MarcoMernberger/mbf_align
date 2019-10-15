@@ -143,10 +143,12 @@ class Paired_Filtered(Straight):
             ppg.FunctionInvariant(output_filenames[0] + "_filter", self.filter_func)
         ]
 
+
 class Paired_Filtered_Trimmed(Straight):
     """Filter reads with a callback func that takes seq1,qual1, name1,
     seq2, qual2, name2 and returns truncated reads/qualities
     """
+
     def __init__(self, filter_func):
         Straight.__init__(self)
         self.filter_func = filter_func
@@ -181,14 +183,10 @@ class Paired_Filtered_Trimmed(Straight):
                             s1, q1, n1, s2, q2, n2 = filtered
                             if s1 is not None and s2 is not None:
                                 op1.write(
-                                    (
-                                        b"@" + n1 + b"\n" + s1 + b"\n+\n" + q1 + b"\n"
-                                    )
+                                    (b"@" + n1 + b"\n" + s1 + b"\n+\n" + q1 + b"\n")
                                 )
                                 op2.write(
-                                    (
-                                        b"@" + n2 + b"\n" + s2 + b"\n+\n" + q2 + b"\n"
-                                    )
+                                    (b"@" + n2 + b"\n" + s2 + b"\n+\n" + q2 + b"\n")
                                 )
                                 counter += 1
 
@@ -196,6 +194,7 @@ class Paired_Filtered_Trimmed(Straight):
         return [
             ppg.FunctionInvariant(output_filenames[0] + "_filter", self.filter_func)
         ]
+
 
 class QualityFilter(object):
     """Support for old style quality filters.
@@ -365,63 +364,108 @@ class UMIExtract(object):
     """Take a set of fastqs 
     and pull out the first N bases as an UMI,
     attach _UMI to the name.
-
     """
 
-    def __init__(self, umi_length = 6, spacer = 4):
+    def __init__(self, umi_length):
         self.umi_length = umi_length
-        self.spacer = spacer
 
     def generate_aligner_input(
         self, output_filename, list_of_fastqs, reverse_reads, read_creator="fastq"
     ):
         n = self.umi_length
-        spacer = self.spacer
         our_iter = get_iterator(read_creator)
         with open(output_filename, "wb") as op:
             if not reverse_reads:
                 for fn in list_of_fastqs:
                     for seq, qual, name in our_iter(fn, False):
                         umi = seq[:n]
-                        seq = seq[n + spacer:]
-                        qual = qual[n + spacer:]
-                        name = name.split(b' ')
+                        seq = seq[n:]
+                        qual = qual[n:]
+                        name = name.split(b" ")
                         name[0] += b"_" + umi
-                        op.write(b"@" + b' '.join(name) + b"\n" + seq + b"\n+\n" + qual + b"\n")
+                        op.write(
+                            b"@"
+                            + b" ".join(name)
+                            + b"\n"
+                            + seq
+                            + b"\n+\n"
+                            + qual
+                            + b"\n"
+                        )
             else:
                 raise NotImplementedError("implement for reverse reads")
 
     def get_dependencies(self, output_filename):
-        return []
+        return [
+            ppg.ParameterInvariant(output_filename + "_umiextract", self.umi_length)
+        ]
 
 
-class QuantSeqFWD(object):
-    """Take a set of Lexogen QuantSeq FWD
-    fastqs, extract the UMIs (into the name),
-    throw away the next 12b, and the last bp
-
+class UMIExtractAndTrim(object):
+    """Take a set of fastqs
+    and pull out the first N bases as an UMI,
+    then trim further @cut_5_prime bases from the front, and
+    @cut_3_prime from the end
+    attach _UMI to the name.
     """
+
+    def __init__(self, umi_length, cut_5_prime, cut_3_prime=None):
+        self.umi_length = umi_length
+        self.cut_5_prime = cut_5_prime
+        if cut_5_prime < 0:
+            raise ValueError("cut_5_prime must be >= 0")
+        if cut_3_prime < 0:
+            raise ValueError("cut_3_prime must be >= 0")
+        if self.cut_5_prime == 0:
+            self.cut_5_prime = None
+        if cut_3_prime == 0:
+            self.cut_3_prime = None
+        else:
+            self.cut_3_prime = -1 * cut_3_prime
 
     def generate_aligner_input(
         self, output_filename, list_of_fastqs, reverse_reads, read_creator="fastq"
     ):
-        n = 6
+        n = self.umi_length
+        cut_5 = self.cut_5_prime
+        cut_3 = self.cut_3_prime
         our_iter = get_iterator(read_creator)
         with open(output_filename, "wb") as op:
             if not reverse_reads:
                 for fn in list_of_fastqs:
                     for seq, qual, name in our_iter(fn, False):
                         umi = seq[:n]
-                        seq = seq[n + 12 : -1]
-                        qual = qual[n + 12 : -1]
-                        name = name.split(b' ')
+                        seq = seq[n + cut_5 : cut_3]
+                        qual = qual[n + cut_5 : cut_3]
+                        name = name.split(b" ")
                         name[0] += b"_" + umi
-                        op.write(b"@" + b' '.join(name) + b"\n" + seq + b"\n+\n" + qual + b"\n")
+                        op.write(
+                            b"@"
+                            + b" ".join(name)
+                            + b"\n"
+                            + seq
+                            + b"\n+\n"
+                            + qual
+                            + b"\n"
+                        )
             else:
                 raise NotImplementedError("implement for reverse reads")
 
     def get_dependencies(self, output_filename):
-        return []
+        return [
+            ppg.ParameterInvariant(
+                output_filename + "_umiextract",
+                (self.umi_length, self.cut_5_prime, self.cut_3_prime),
+            )
+        ]
+
+
+def QuantSeqFWD():
+    """Take a set of Lexogen QuantSeq FWD
+    fastqs, extract the UMIs (into the name),
+    throw away the next 12b, and the last bp
+    """
+    return UMIExtractAndTrim(6, 12, 1)
 
 
 # TODO: KHmer Filter
