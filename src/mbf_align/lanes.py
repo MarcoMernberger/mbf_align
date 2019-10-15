@@ -13,42 +13,7 @@ from mbf_qualitycontrol import register_qc, QCCollectingJob, qc_disabled
 dp, X = dppd()
 
 
-class AlignedSample:
-    def __init__(
-        self, name, alignment_job, genome, is_paired, vid, result_dir=None, aligner=None
-    ):
-        """
-        Create an aligned sample from a BAM producing job.
-        See Sample.align()
-
-        Parameters:
-            alignment_job FileGeneratingJob, FileInvariant, str, pathlib.Path
-            Where does the BAM come from?
-            str and Path get's converted into a FileInvariant
-        """
-
-        self.name = name
-        ppg.util.assert_uniqueness_of_object(self)
-        self.alignment_job, self.index_job, bam_name, index_fn = self._parse_alignment_job_input(
-            alignment_job
-        )
-        self.result_dir = (
-            Path(result_dir)
-            if result_dir
-            else (Path("results") / "aligned" / self.name)
-        )
-        self.result_dir.mkdir(exist_ok=True, parents=True)
-        self.genome = genome
-        self.is_paired = is_paired
-        self.vid = vid
-        self.bam_filename = bam_name
-        self.index_filename = index_fn
-        self.aligner = aligner
-        self.register_qc()
-
-    def __hash__(self):
-        return hash(self.__class__.__name__ + self.name)
-
+class _BamDerived:
     def _parse_alignment_job_input(self, alignment_job):
         if isinstance(alignment_job, (str, Path)):
             alignment_job = ppg.FileInvariant(alignment_job)
@@ -111,14 +76,17 @@ class AlignedSample:
             raise NotImplementedError("Should not happe / covered by earlier if")
         return alignment_job, index_job, Path(bam_name), Path(index_fn)
 
-    def load(self):
-        return self.alignment_job, self.index_job
-
     def _index(self, input_fn, output_fn):
         def do_index():
             pysam.index(str(Path(input_fn).absolute()), str(Path(output_fn).absolute()))
 
         return do_index
+
+    def __hash__(self):
+        return hash(self.__class__.__name__ + self.name)
+
+    def load(self):
+        return self.alignment_job, self.index_job
 
     def get_bam(self):
         import multiprocessing
@@ -132,6 +100,40 @@ class AlignedSample:
     def get_bam_names(self):
         """Retrieve the bam filename and index name as strings"""
         return (str(self.bam_filename), str(self.index_filename))
+
+
+class AlignedSample(_BamDerived):
+    def __init__(
+        self, name, alignment_job, genome, is_paired, vid, result_dir=None, aligner=None
+    ):
+        """
+        Create an aligned sample from a BAM producing job.
+        See Sample.align()
+
+        Parameters:
+            alignment_job FileGeneratingJob, FileInvariant, str, pathlib.Path
+            Where does the BAM come from?
+            str and Path get's converted into a FileInvariant
+        """
+
+        self.name = name
+        ppg.util.assert_uniqueness_of_object(self)
+        self.alignment_job, self.index_job, bam_name, index_fn = self._parse_alignment_job_input(
+            alignment_job
+        )
+        self.result_dir = (
+            Path(result_dir)
+            if result_dir
+            else (Path("results") / "aligned" / self.name)
+        )
+        self.result_dir.mkdir(exist_ok=True, parents=True)
+        self.genome = genome
+        self.is_paired = is_paired
+        self.vid = vid
+        self.bam_filename = bam_name
+        self.index_filename = index_fn
+        self.aligner = aligner
+        self.register_qc()
 
     def get_unique_aligned_bam(self):
         """Deprecated compability with older pipeline"""
