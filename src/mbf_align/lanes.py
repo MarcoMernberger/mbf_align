@@ -413,7 +413,7 @@ class AlignedSample(_BamDerived):
         )
 
     def register_qc_biotypes(self):
-        output_filename = self.result_dir / "reads_per_biotype.png"
+        output_filename = self.result_dir / f"{self.name}_reads_per_biotype.png"
 
         from mbf_genomics.genes import Genes
         from mbf_genomics.genes.anno_tag_counts import GeneUnstranded
@@ -497,7 +497,7 @@ class AlignedSample(_BamDerived):
         or ancient virus awakening"""
         import mbf_genomics
 
-        output_filename = self.result_dir / "subchromosomal_distribution.png"
+        output_filename = self.result_dir / f"{self.name}_subchromosomal_distribution.png"
 
         class IntervalStrategyWindows(
             mbf_genomics.genes.anno_tag_counts._IntervalStrategy
@@ -582,7 +582,7 @@ class AlignedSample(_BamDerived):
     def register_qc_splicing(self):
         """How many reads were spliced? How many of those splices were known splice sites,
         how many were novel"""
-        output_filename = self.result_dir / "splice_sites.png"
+        output_filename = self.result_dir / f"{self.name}_splice_sites.png"
 
         def calc():
             from mbf_bam import count_introns
