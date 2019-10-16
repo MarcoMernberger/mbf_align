@@ -213,7 +213,7 @@ class AlignedSample(_BamDerived):
 
     def register_qc_complexity(self):
 
-        output_filename = self.result_dir / "complexity.png"
+        output_filename = self.result_dir / f"{self.name}_complexity.png"
 
         def calc():
             import mbf_bam
@@ -346,7 +346,7 @@ class AlignedSample(_BamDerived):
                         result[chr].append((tag, strand, [start], [stop]))
                 return result
 
-        output_filename = self.result_dir / "strandedness.png"
+        output_filename = self.result_dir / f"{self.name}_strandedness.png"
 
         def calc():
             from mbf_genomics.genes.anno_tag_counts import IntervalStrategyGene
