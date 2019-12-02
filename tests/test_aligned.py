@@ -171,7 +171,7 @@ class TestAligned:
         )
         assert lane3_subset.mapped_reads()  # make sure there was something to subtract
         assert "shu" in lane_some.get_bam_names()[0]
-        assert_image_equal(qc_jobs[0].filenames[0], '_result_dir')
+        assert_image_equal(qc_jobs[0].filenames[0], "_result_dir")
         assert_image_equal(qc_jobs[0].filenames[0])
 
 
@@ -198,7 +198,9 @@ class TestQualityControl:
         not_pruned_count = sum([1 for x in get_qc_jobs() if not x._pruned])
         assert not_pruned_count == remaining_job_count  # plot cache, plot_table, plot
         ppg.run_pipegraph()
-        assert_image_equal(lane.result_dir / chdir / filename, suffix="_" + filename)
+        assert_image_equal(
+            lane.result_dir / chdir / f"{lane.name}_{filename}", suffix="_" + filename
+        )
 
     def test_qc_complexity(self):
         self._test_qc_plots("complexity.png", 3)

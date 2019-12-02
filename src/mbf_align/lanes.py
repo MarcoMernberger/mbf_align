@@ -162,17 +162,22 @@ class AlignedSample(_BamDerived):
 
         """
         if new_name is None:
-            new_name = self.name + '_' + post_processor.name
+            new_name = self.name + "_" + post_processor.name
         if result_dir is None:
             result_dir = (
-                self.result_dir / ".." / post_processor.result_folder_name / self.result_dir.name
+                self.result_dir
+                / ".."
+                / post_processor.result_folder_name
+                / self.result_dir.name
             )
         result_dir = Path(result_dir)
         result_dir.mkdir(exist_ok=True, parents=True)
         bam_filename = result_dir / (new_name + ".bam")
 
         def inner(output_filename):
-            post_processor.process(Path(self.get_bam_names()[0]), Path(output_filename), result_dir)
+            post_processor.process(
+                Path(self.get_bam_names()[0]), Path(output_filename), result_dir
+            )
 
         alignment_job = ppg.FileGeneratingJob(bam_filename, inner).depends_on(
             self.load(),
@@ -450,7 +455,7 @@ class AlignedSample(_BamDerived):
         )
 
     def register_qc_alignment_stats(self):
-        output_filename = self.result_dir / ".." / "alignment_statistics.png"
+        output_filename = self.result_dir / ".." / f"{self.name}_alignment_statistics.png"
 
         def calc_and_plot(output_filename, lanes):
             parts = []
@@ -466,13 +471,13 @@ class AlignedSample(_BamDerived):
                     )
                 )
             df = pd.concat(parts)
-            order = sorted(df['what'].unique())
-            umrn= 'Uniquely mapped reads number'
+            order = sorted(df["what"].unique())
+            umrn = "Uniquely mapped reads number"
             if umrn in order:
-                order = [x for x in order if x != umrn]  +[umrn]
+                order = [x for x in order if x != umrn] + [umrn]
             return (
                 dp(df)
-                .categorize('what', order)
+                .categorize("what", order)
                 .p9()
                 .theme_bw()
                 .annotation_stripes()
@@ -497,7 +502,9 @@ class AlignedSample(_BamDerived):
         or ancient virus awakening"""
         import mbf_genomics
 
-        output_filename = self.result_dir / f"{self.name}_subchromosomal_distribution.png"
+        output_filename = (
+            self.result_dir / f"{self.name}_subchromosomal_distribution.png"
+        )
 
         class IntervalStrategyWindows(
             mbf_genomics.genes.anno_tag_counts._IntervalStrategy

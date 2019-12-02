@@ -113,17 +113,24 @@ class FASTQsFromFolder(_FASTQsBase):
         self.folder = Path(folder)
         if not self.folder.exists():
             raise IOError(f"folder {self.folder} not found")
-        if not any(self.folder.glob("*.fastq.gz")) and not any(
-            self.folder.glob("*.fastq")
-        ):
-            raise ValueError(f"No *.fastq or *.fastq.gz in {self.folder} found")
+        if not hasattr(self, "globs"):
+            self.globs = "*.fastq.gz", "*.fastq"
+        for g in self.globs:
+            if any(self.folder.glob(g)):
+                break
+        else:
+            raise ValueError(
+                f"No files matching any of {self.globs} in {self.folder} found"
+            )
 
     def __call__(self):
-        fastqs = [x.resolve() for x in self.folder.glob("*.fastq*")]
+        fastqs = []
+        for g in self.globs:
+            fastqs.extend([x.resolve() for x in self.folder.glob(g)])
         return self._parse_filenames(fastqs)
 
     def __str__(self):
-        return f"FASTQsFromFolder({self.folder})"
+        return f"{self.__class__.__name__}({self.folder})"
 
 
 class FASTQsFromPrefix(_FASTQsBase):

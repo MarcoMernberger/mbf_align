@@ -708,7 +708,7 @@ def test_cutadapt_raises_on_negative_adapter_sequences():
         fastq2.CutAdapt(1, -5, True)
 
 
-def test_umi_extract():
+def test_umi_extract(new_pipegraph):
     test = b"""@SEQ_ID_1 123
 AATTTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
 +
@@ -748,7 +748,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
         with open("test_straight_copy.fastq", "wb") as op:
             op.write(test)
         x = fastq2.UMIExtract(3)
-        assert x.get_dependencies("test_straight_copy.out.fastq") == []
+        assert len(x.get_dependencies("test_straight_copy.out.fastq")) == 1
         x.generate_aligner_input(
             "test_straight_copy.out.fastq", ["test_straight_copy.fastq"], False
         )
@@ -761,7 +761,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
             os.unlink("test_straight_copy.out.fastq")
 
 
-def test_quantseq_fwd():
+def test_quantseq_fwd(new_pipegraph):
     test = b"""@SEQ_ID_1
 AATTTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
 +
@@ -801,7 +801,7 @@ CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
         with open("test_straight_copy.fastq", "wb") as op:
             op.write(test)
         x = fastq2.QuantSeqFWD()
-        assert x.get_dependencies("test_straight_copy.out.fastq") == []
+        assert len(x.get_dependencies("test_straight_copy.out.fastq")) == 1
         x.generate_aligner_input(
             "test_straight_copy.out.fastq", ["test_straight_copy.fastq"], False
         )
