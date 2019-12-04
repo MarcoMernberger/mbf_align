@@ -229,7 +229,7 @@ class FASTQsFromURLs(_FASTQsBase):
 
 def FASTQsFromAccession(accession):  # pragma: no cover - for now
     if accession.startswith("GSM"):
-        raise NotImplementedError()
+        return _FASTQs_from_url_callback(accession, _urls_for_gsm)
     # elif accession.startswith("GSE"):#  multilpe
     # raise NotImplementedError()
     elif accession.startswith("SRR"):
@@ -269,6 +269,35 @@ def _FASTQs_from_url_callback(accession, url_callback):
         cache_file.write_text("\n".join(url_callback(accession)))
     urls = cache_file.read_text().split("\n")
     return FASTQsFromURLs(urls)
+
+
+def _urls_for_gsm(gsm):
+    import re
+
+    url = "http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=%s" % gsm
+    req = requests.get(url)
+    page = req.text.strip()
+    SRX = re.findall(">(SRX\d+)<", page)
+    if not SRX:
+        raise ValueError("Could not find SRX number")
+    if len(set(SRX)) > 1:
+        raise ValueError("Found multiple SRX: %s" % SRX)
+    SRX = SRX[0]
+    srx_url = "https://www.ncbi.nlm.nih.gov/sra?term=%s" % SRX
+    req = requests.get(srx_url)
+    page = req.text
+    SRA = re.findall("SRR\d+", page)
+    result = []
+    for srr in SRA:
+        listing_url = "http://ftp.sra.ebi.ac.uk/vol1/fastq/%s/%s/%s/" % (
+            srr[:6],
+            "00" + srr[-1],
+            srr,
+        )
+        req = requests.get(listing_url)
+        for filename in re.findall('href="([^"]+\.fastq.gz)"', req.text):
+            result.append(listing_url + filename)
+    return result
 
 
 class FASTQsFromMRNAs(_FASTQsBase):
