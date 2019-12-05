@@ -138,7 +138,7 @@ class Sample:
                 )
             else:
 
-                def prep_aligner_input():
+                def prep_aligner_input_r1():
                     import shutil
 
                     self.fastq_processor.generate_aligner_input(
@@ -146,23 +146,32 @@ class Sample:
                         [x[0] for x in input_filenames],
                         self.reverse_reads,
                     )
+                    shutil.move(str(output_filenames[0]) + ".temp", output_filenames[0])
+
+                def prep_aligner_input_r2():
+                    import shutil
+
                     self.fastq_processor.generate_aligner_input(
                         str(output_filenames[1]) + ".temp",
                         [x[1] for x in input_filenames],
                         self.reverse_reads,
                     )
-                    shutil.move(str(output_filenames[0]) + ".temp", output_filenames[0])
                     shutil.move(str(output_filenames[1]) + ".temp", output_filenames[1])
 
-                job = ppg.MultiTempFileGeneratingJob(
-                    output_filenames, prep_aligner_input
+                jobR1 = ppg.FileGeneratingJob(
+                    output_filenames[0], prep_aligner_input_r1
                 )
-                job.depends_on(
+                jobR2 = ppg.FileGeneratingJob(
+                    output_filenames[1], prep_aligner_input_r2
+                )
+
+                jobR1.depends_on(
                     self.fastq_processor.get_dependencies(str(output_filenames[0]))
                 )
-                job.depends_on(
+                jobR2.depends_on(
                     self.fastq_processor.get_dependencies(str(output_filenames[1]))
                 )
+                job = ppg.JobList([jobR1, jobR2])
         else:
 
             def prep_aligner_input(output_filename):
@@ -229,7 +238,9 @@ class Sample:
         alignment_job = aligner.align_job(
             input_job.filenames[0],
             input_job.filenames[1] if self.is_paired else None,
-            index_job.output_path if hasattr(index_job, 'output_path') else index_job.filenames[0],
+            index_job.output_path
+            if hasattr(index_job, "output_path")
+            else index_job.filenames[0],
             output_filename,
             aligner_parameters if aligner_parameters else {},
         )
@@ -269,5 +280,12 @@ class Sample:
         a = FASTQC()
         output_dir = self.result_dir / "FASTQC"
         temp_job = self.prepare_input()
-        job = a.run(output_dir, temp_job.filenames)
-        return register_qc(job.depends_on(self.prepare_input()))
+        if hasattr(temp_job, 'filenames'):
+            filenames = temp_job.filenames
+        else:
+            filenames = []
+            for j in temp_job:  # is actually joblist
+                filenames.extend(j.filenames)
+
+        job = a.run(output_dir, filenames)
+        return register_qc(job.depends_on(temp_job))
