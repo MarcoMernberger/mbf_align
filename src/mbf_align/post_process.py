@@ -190,7 +190,7 @@ class AnnotateFastqBarcodes(_PostProcessor):
                 raise ValueError("Tag must be two uppercase characters")
                 if (type(start) != int) or (type(end) != int):
                     raise ValueError(
-                        f"Indices must be exactly 2 integers - was {repr(y)}, (from {repr(slice)})"
+                        f"Indices must be exactly 2 integers - was {repr(start)}, {repr(end)}"
                     )
                 if start >= end or start < 0 or end < 0:
                     raise ValueError(

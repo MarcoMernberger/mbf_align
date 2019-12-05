@@ -1,8 +1,7 @@
-import pytest
 from pathlib import Path
 import pypipegraph as ppg
 from mbf_align import Sample, AlignedSample
-from mbf_sampledata import get_sample_data, get_sample_path, get_human_22_fake_genome
+from mbf_sampledata import get_sample_path, get_human_22_fake_genome
 import mbf_qualitycontrol
 
 

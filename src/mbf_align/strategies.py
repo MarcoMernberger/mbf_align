@@ -3,6 +3,7 @@ import shutil
 import requests
 import hashlib
 import pypipegraph as ppg
+from collections.abc import Iterable
 from mbf_externals.util import download_file
 
 
@@ -21,8 +22,6 @@ def build_fastq_strategy(input_strategy):
 
     if isinstance(input_strategy, _FASTQsBase):
         return input_strategy
-    elif isinstance(input_strategy, list):
-        return _FASTQsJoin([build_fastq_strategy(x) for x in input_strategy])
     elif isinstance(input_strategy, str) or isinstance(input_strategy, Path):
         p = Path(input_strategy)
         if p.is_dir():
@@ -31,8 +30,16 @@ def build_fastq_strategy(input_strategy):
             input_strategy = FASTQsFromFile(p)
     elif isinstance(input_strategy, ppg.FileGeneratingJob):
         input_strategy = FASTQsFromJob(input_strategy)
+    elif isinstance(input_strategy, Iterable):
+        for x in input_strategy:
+            if not (isinstance(x, str) or isinstance(x, Path)):  # pragma: no cover
+                raise ValueError(
+                    "if your input strategy is an iterable, entries must be str/Path"
+                )
+        input_strategy = FASTQsFromFiles([Path(p) for p in input_strategy])
+
     else:
-        raise ValueError("Could not parse input_strategy")
+        raise ValueError(f"Could not parse input_strategy: {repr(input_strategy)}")
     return input_strategy
 
 
@@ -73,7 +80,7 @@ class _FASTQsBase:
             return self._combine_r1_r2(forward, reverse)
 
 
-class _FASTQsJoin(_FASTQsBase):
+class FASTQsJoin(_FASTQsBase):
     """join files from multiple strategies"""
 
     def __init__(self, strategies):
@@ -102,6 +109,19 @@ class FASTQsFromFile(_FASTQsBase):
             return [(self.r1_filename.resolve(), self.r2_filename.resolve())]
         else:
             return [(self.r1_filename.resolve(),)]
+
+
+class FASTQsFromFiles(_FASTQsBase):
+    """Use a list of files"""
+
+    def __init__(self, filenames_r1_and_r2):
+        self.filenames = filenames_r1_and_r2
+        for f in self.filenames:
+            if not f.exists():
+                raise IOError(f"file {f} not found")
+
+    def __call__(self):
+        return self._parse_filenames([f.resolve() for f in self.filenames])
 
 
 class FASTQsFromFolder(_FASTQsBase):
@@ -277,7 +297,7 @@ def _urls_for_gsm(gsm):
     url = "http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=%s" % gsm
     req = requests.get(url, timeout=10)
     page = req.text.strip()
-    SRX = re.findall(">(SRX\d+)<", page)
+    SRX = re.findall(r">(SRX\d+)<", page)
     if not SRX:
         raise ValueError("Could not find SRX number")
     if len(set(SRX)) > 1:
@@ -286,7 +306,7 @@ def _urls_for_gsm(gsm):
     srx_url = "https://www.ncbi.nlm.nih.gov/sra?term=%s" % SRX
     req = requests.get(srx_url, timeout=10)
     page = req.text
-    SRA = re.findall("SRR\d+", page)
+    SRA = re.findall(r"SRR\d+", page)
     result = []
     for srr in SRA:
         listing_url = "http://ftp.sra.ebi.ac.uk/vol1/fastq/%s/%s/%s/" % (
@@ -296,9 +316,9 @@ def _urls_for_gsm(gsm):
         )
         # we could use the http server - but in my experience the ftp server
         # transfers files about 100x faster (20 MB/s vs 200k/s...)
-        ftp_url = 'ftp' + listing_url[4:]
+        ftp_url = "ftp" + listing_url[4:]
         req = requests.get(listing_url, timeout=10)
-        for filename in re.findall('href="([^"]+\.fastq.gz)"', req.text):
+        for filename in re.findall(r'href="([^"]+\.fastq.gz)"', req.text):
             result.append(ftp_url + filename)
     return result
 

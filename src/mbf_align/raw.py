@@ -158,10 +158,10 @@ class Sample:
                     )
                     shutil.move(str(output_filenames[1]) + ".temp", output_filenames[1])
 
-                jobR1 = ppg.FileGeneratingJob(
+                jobR1 = ppg.TempFileGeneratingJob(
                     output_filenames[0], prep_aligner_input_r1
                 )
-                jobR2 = ppg.FileGeneratingJob(
+                jobR2 = ppg.TempFileGeneratingJob(
                     output_filenames[1], prep_aligner_input_r2
                 )
 
@@ -172,6 +172,8 @@ class Sample:
                     self.fastq_processor.get_dependencies(str(output_filenames[1]))
                 )
                 job = ppg.JobList([jobR1, jobR2])
+                # needed by downstream code.
+                job.filenames = [output_filenames[0], output_filenames[1]]
         else:
 
             def prep_aligner_input(output_filename):
