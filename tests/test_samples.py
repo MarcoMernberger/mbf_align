@@ -12,7 +12,6 @@ from mbf_align import (
     FASTQsFromURLs,
     FASTQsFromAccession,
     FASTQsFromPrefix,
-    FASTQsFromFolderR2Only,
     build_fastq_strategy,
     FASTQsFromMRNAs,
 )

@@ -172,3 +172,41 @@ class UmiTools_Dedup(_PostProcessor):
 
     def get_parameters(self):
         return (self.get_version(),)  # method is being taken care of by name
+
+
+class AnnotateFastqBarcodes(_PostProcessor):
+    """Annotate cell and umi barcodes from _R1_ fastq files.
+    ala dropseq"""
+
+    def __init__(self, raw_lane, barcodes_to_slices):
+        self.name = "AnnotateCellAndUMI"
+        self.result_folder_name = self.name
+        self.raw_lane = raw_lane
+        self.barcodes_to_slices = [(x, y[0], y[1]) for (x, y) in barcodes_to_slices.items()]
+        for tag, start, end in self.barcodes_to_slices:
+            if len(tag) != 2:
+                raise ValueError("Tag must be two uppercase characters")
+            if tag.upper() != tag:
+                raise ValueError("Tag must be two uppercase characters")
+                if (type(start) != int) or (type(end) != int):
+                    raise ValueError(
+                        f"Indices must be exactly 2 integers - was {repr(y)}, (from {repr(slice)})"
+                    )
+                if start >= end or start < 0 or end < 0:
+                    raise ValueError(
+                        "Invalid index. Must be (start,end) with start < end. No python slicing."
+                    )
+
+    def process(self, input_bam_name, output_bam_name, result_dir):
+        fastq2_filenames = [x[0] for x in self.raw_lane.input_strategy()]
+        import mbf_bam
+
+        mbf_bam.annotate_barcodes_from_fastq(
+            str(output_bam_name),
+            str(input_bam_name),
+            [str(x) for x in fastq2_filenames],
+            self.barcodes_to_slices,
+        )
+
+    def register_qc(self, new_lane):
+        pass  # pragma: no cover
