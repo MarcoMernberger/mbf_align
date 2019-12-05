@@ -275,7 +275,7 @@ def _urls_for_gsm(gsm):
     import re
 
     url = "http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=%s" % gsm
-    req = requests.get(url)
+    req = requests.get(url, timeout=10)
     page = req.text.strip()
     SRX = re.findall(">(SRX\d+)<", page)
     if not SRX:
@@ -284,7 +284,7 @@ def _urls_for_gsm(gsm):
         raise ValueError("Found multiple SRX: %s" % SRX)
     SRX = SRX[0]
     srx_url = "https://www.ncbi.nlm.nih.gov/sra?term=%s" % SRX
-    req = requests.get(srx_url)
+    req = requests.get(srx_url, timeout=10)
     page = req.text
     SRA = re.findall("SRR\d+", page)
     result = []
@@ -294,9 +294,12 @@ def _urls_for_gsm(gsm):
             "00" + srr[-1],
             srr,
         )
-        req = requests.get(listing_url)
+        # we could use the http server - but in my experience the ftp server
+        # transfers files about 100x faster (20 MB/s vs 200k/s...)
+        ftp_url = 'ftp' + listing_url[4:]
+        req = requests.get(listing_url, timeout=10)
         for filename in re.findall('href="([^"]+\.fastq.gz)"', req.text):
-            result.append(listing_url + filename)
+            result.append(ftp_url + filename)
     return result
 
 
