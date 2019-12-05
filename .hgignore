@@ -54,3 +54,4 @@ result_images
 tests/run/*
 pip-wheel-metadata/
 src/mbf_align/fastq2.c
+src/mbf_align/_common.c
