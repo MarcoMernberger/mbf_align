@@ -260,7 +260,7 @@ class Sample:
                 % aligner
             )
         return AlignedSample(
-            f"{self.name}_{aligner.name}",
+            f"{self.name if name is None else name}_{aligner.name}",
             alignment_job,
             genome,
             self.is_paired,
