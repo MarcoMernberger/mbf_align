@@ -60,6 +60,7 @@ class BlockedFileAdaptor:
 
 def read_file_blocked(filename, block_size=1 * 1024 * 1024):
     """Read a (possibly compressed) file block by uncompressed block, yielding the blocks"""
+    filename = str(filename)  # Work with Paths...
     p = None
     zf = None
     if not os.path.exists(filename):

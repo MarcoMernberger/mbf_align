@@ -196,11 +196,13 @@ class FASTQsFromURLs(_FASTQsBase):
             key.update(u.encode("utf8"))
         key = key.hexdigest()
         for u in self.urls:
+            if u == "":
+                raise ValueError("Empty URL")
             if not ".fastq.gz" in u:  # pragma: no cover
                 raise ValueError("Currently limited to .fastq.gz urls", u)
-            if "_1.fastq" in u or "_R1_" in u:
+            if "_1.fastq" in u or "_R1_" in u or "_R1.fastq" in u:
                 suffix = "_R1_"
-            elif "_2.fastq" in u or "_R2_" in u:
+            elif "_2.fastq" in u or "_R2_" in u or "_R2.fastq" in u:
                 suffix = "_R2_"
             else:
                 suffix = ""
@@ -227,13 +229,70 @@ class FASTQsFromURLs(_FASTQsBase):
         return result
 
 
+class _FASTQsFromSRA(_FASTQsBase):
+    def __init__(self, accession):
+        if accession.endswith(":P"):
+            self.paired = True
+        elif accession.endswith(":S"):
+            self.paired = False
+        else:
+            raise ValueError(
+                "Append :P or :S to accession for paired/single end download"
+            )
+        self.accession = accession[:-2]
+        self.target_dir = Path("incoming") / "automatic" / accession
+        self.target_dir.mkdir(exist_ok=True, parents=True)
+        self.cache_dir = Path("cache/sra_temp")
+        self.cache_dir.mkdir(exist_ok=True, parents=True)
+        self.dependencies = self.fastq_dump()
+        import mbf_externals.sratoolkit
+
+        self.algo = mbf_externals.sratoolkit.SRAToolkit()
+
+    def __call__(self):
+        # todo: figure out single end lanes
+        return [
+            (
+                str(self.target_dir / self.accession) + "_R1.fastq.gz",
+                str(self.target_dir / self.accession) + "_R2.fastq.gz",
+            )
+        ]
+
+    def fastq_dump(self):
+        def dump():
+            import subprocess
+            import os
+
+            cmd = [
+                self.algo.path / "bin/" "fasterq-dump",
+                "-O",
+                str(self.target_dir),
+                "-t",
+                str(self.cache_dir),
+                "-e",
+                "4",
+            ]
+            if self.paired:
+                cmd.append("-S")
+            cmd.append(self.accession)
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = p.communicate()
+            (self.target_dir / "stdout").write_bytes(stdout)
+            (self.target_dir / "stderr").write_bytes(stderr)
+            if p.returncode != 0 or b'invalid accession' in stderr:
+                raise ValueError("fasterq-dump", p.returncode)
+            (self.target_dir / "sentinel").write_text("done")
+
+        return ppg.FileGeneratingJob(self.target_dir / "sentinel", dump)
+
+
 def FASTQsFromAccession(accession):  # pragma: no cover - for now
     if accession.startswith("GSM"):
         return _FASTQs_from_url_callback(accession, _urls_for_gsm)
     # elif accession.startswith("GSE"):#  multilpe
     # raise NotImplementedError()
     elif accession.startswith("SRR"):
-        raise NotImplementedError()
+        return _FASTQsFromSRA(accession)
     # elif accession.startswith("E-MTAB"): # multiple!
     # raise NotImplementedError()
     elif accession.startswith("PRJNA"):
@@ -242,6 +301,8 @@ def FASTQsFromAccession(accession):  # pragma: no cover - for now
         raise NotImplementedError()
     elif accession.startswith("ERR"):
         return _FASTQs_from_url_callback(accession, _urls_for_err)
+    elif accession.startswith("E-MTAB") and ":" in accession:
+        return _FASTQs_from_url_callback(accession, _urls_for_emtab)
     else:
         raise ValueError("Could not handle this accession %s" % accession)
 
@@ -256,8 +317,29 @@ def _urls_for_err(accession):
     urls = set()
     for line in lines[1:]:
         line = line.split("\t")
-        urls.update(line[1].split(";"))
+        try:
+            urls.update(line[1].split(";"))
+        except IndexError:
+            raise ValueError("No fastq available for {accession} from ENA")
     urls = sorted(["http://" + x for x in urls])
+    return urls
+
+
+def _urls_for_emtab(accession):
+    mtab, sample = accession.split(":")
+    url = f"https://www.ebi.ac.uk/arrayexpress/files/{mtab}/{mtab}.sdrf.txt"
+    r = requests.get(url)
+    import io
+    import pandas as pd
+
+    df = pd.read_csv(io.StringIO(r.text), sep="\t")
+    matching = df[df["Source Name"] == sample]
+    if len(matching) == 0:
+        raise ValueError("Sample not found in e-mtab", sample, df["Source Name"])
+    urls = []
+    for c in ["Comment[FASTQ_URI]", "Comment[FASTQ_URI].1"]:
+        if c in matching:
+            urls.append(matching[c].iloc[0])
     return urls
 
 
@@ -296,10 +378,16 @@ def _urls_for_gsm(gsm):
         )
         # we could use the http server - but in my experience the ftp server
         # transfers files about 100x faster (20 MB/s vs 200k/s...)
-        ftp_url = 'ftp' + listing_url[4:]
+        ftp_url = "ftp" + listing_url[4:]
         req = requests.get(listing_url, timeout=10)
         for filename in re.findall('href="([^"]+\.fastq.gz)"', req.text):
-            result.append(ftp_url + filename)
+            if filename:
+                result.append(ftp_url + filename)
+        if not result:
+            print(listing_url)
+    print(result)
+    if not result:
+        raise ValueError("no fastq found", srx_url, SRA)
     return result
 
 

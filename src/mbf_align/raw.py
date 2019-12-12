@@ -96,7 +96,7 @@ class Sample:
             input_filenames = [str(f[1]) for f in input_pairs]
         elif self.pairing == "paired":
             if not any_r2:
-                raise PairingError("Paired end lane, but no R2 reads found")
+                raise PairingError(f"Paired end lane, but no R2 reads found. Found files: {input_pairs}")
             input_filenames = [
                 (str(f[0]), str(f[1])) for f in input_pairs
             ]  # throwing away all later...
