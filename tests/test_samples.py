@@ -7,6 +7,7 @@ import pypipegraph as ppg
 
 from mbf_align import (
     FASTQsFromFile,
+    FASTQsFromFiles,
     FASTQsFromFolder,
     FASTQsFromJob,
     FASTQsFromURLs,
@@ -14,6 +15,7 @@ from mbf_align import (
     FASTQsFromPrefix,
     build_fastq_strategy,
     FASTQsFromMRNAs,
+    FASTQsJoin
 )
 from mbf_align import Sample
 from mbf_align import PairingError
@@ -55,6 +57,28 @@ def test_FASTQsFromFilePairedMissingR2():
         FASTQsFromFile(fn, fn2)
 
 
+def test_FASTQsFromFilesPaired():
+    fn = Path(get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz"))
+    fn2 = Path(
+        get_sample_data(
+            Path("mbf_align/sample_b") / ".." / "sample_b" / "a_R2_.fastq.gz"
+        )
+    )
+    o = FASTQsFromFiles([fn, fn2])
+    assert o() == [(fn.resolve(), fn2.resolve())]
+
+
+def test_FASTQsFromFilesPaired_build_strategy():
+    fn = Path(get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz"))
+    fn2 = Path(
+        get_sample_data(
+            Path("mbf_align/sample_b") / ".." / "sample_b" / "a_R2_.fastq.gz"
+        )
+    )
+    o = build_fastq_strategy([fn, fn2])
+    assert o() == [(fn.resolve(), fn2.resolve())]
+
+
 def test_FASTQsFromFolder():
     folder = Path(get_sample_data(Path("mbf_align/sample_a")))
     o = FASTQsFromFolder(folder)
@@ -65,6 +89,21 @@ def test_FASTQsFromFolder():
         ((folder / "a.fastq").resolve(),),
         ((folder / "b.fastq.gz").resolve(),),
     ]
+
+
+def test_fastqs_join():
+    fn = Path(get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz"))
+    fn2 = Path(
+        get_sample_data(
+            Path("mbf_align/sample_b") / ".." / "sample_b" / "a_R2_.fastq.gz"
+        )
+    )
+    a = FASTQsFromFiles([fn, fn2])
+    b = FASTQsFromFile(fn)
+    c = FASTQsFromFile(fn2)
+    d = FASTQsJoin([a, b, c])
+    o = d()
+    assert o == [(fn.resolve(), fn2.resolve()), (fn.resolve(),), (fn2.resolve(),)]
 
 
 def test_FASTQsFromFolder_raises_on_non_existing():
@@ -216,7 +255,7 @@ class TestSamples:
                 ).resolve(),
             )
         ]
-        # multiple files
+        # multiple files - end up being paired!
         assert build_fastq_strategy(
             [
                 get_sample_data(
@@ -231,12 +270,10 @@ class TestSamples:
                 Path(
                     get_sample_data(Path("mbf_align/sample_b") / "a_R1_.fastq.gz")
                 ).resolve(),
-            ),
-            (
                 Path(
                     get_sample_data(Path("mbf_align/sample_b") / "a_R2_.fastq.gz")
                 ).resolve(),
-            ),
+            )
         ]
         # folder
         assert build_fastq_strategy(

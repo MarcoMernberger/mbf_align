@@ -198,8 +198,12 @@ class TestQualityControl:
         not_pruned_count = sum([1 for x in get_qc_jobs() if not x._pruned])
         assert not_pruned_count == remaining_job_count  # plot cache, plot_table, plot
         ppg.run_pipegraph()
+        if chdir == '..':
+            fn = lane.result_dir / chdir / filename
+        else:
+            fn = lane.result_dir / chdir / f"{lane.name}_{filename}"
         assert_image_equal(
-            lane.result_dir / chdir / f"{lane.name}_{filename}", suffix="_" + filename
+            fn, suffix="_" + filename
         )
 
     def test_qc_complexity(self):

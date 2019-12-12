@@ -455,7 +455,7 @@ class AlignedSample(_BamDerived):
         )
 
     def register_qc_alignment_stats(self):
-        output_filename = self.result_dir / ".." / f"{self.name}_alignment_statistics.png"
+        output_filename = self.result_dir / ".." / f"alignment_statistics.png"
 
         def calc_and_plot(output_filename, lanes):
             parts = []
