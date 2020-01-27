@@ -54,7 +54,14 @@ class SubtractOtherLane(_PostProcessor):
         )
 
     def get_dependencies(self):
-        return super().get_dependencies() + [self.other_alignment.load()]
+        import mbf_bam
+
+        return super().get_dependencies() + [
+            self.other_alignment.load(),
+            ppg.ParameterInvariant(
+                "SubtractOtherLane.mbf_bam.version", mbf_bam.__version__
+            ),
+        ]
 
     def get_vid(self, source_vid):
         if source_vid == self.other_alignment.vid:
@@ -69,7 +76,7 @@ class SubtractOtherLane(_PostProcessor):
             now = new_lane.mapped_reads()
             delta = was - now
             Path(of).write_text(
-                f"Lost {delta} reads from {was} ({delta / was * 100:.2f}%)"
+                f"Subtracted {self.other_alignment.name} from {parent_lane.name}.\nLost {delta} reads of {was} ({delta / was * 100:.2f}%)"
             )
 
         delta_job = ppg.FileGeneratingJob(
@@ -182,7 +189,9 @@ class AnnotateFastqBarcodes(_PostProcessor):
         self.name = "AnnotateCellAndUMI"
         self.result_folder_name = self.name
         self.raw_lane = raw_lane
-        self.barcodes_to_slices = [(x, y[0], y[1]) for (x, y) in barcodes_to_slices.items()]
+        self.barcodes_to_slices = [
+            (x, y[0], y[1]) for (x, y) in barcodes_to_slices.items()
+        ]
         for tag, start, end in self.barcodes_to_slices:
             if len(tag) != 2:
                 raise ValueError("Tag must be two uppercase characters")
