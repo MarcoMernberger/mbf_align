@@ -487,7 +487,7 @@ class AlignedSample(_BamDerived):
                 .title(lanes[0].genome.name)
                 .turn_x_axis_labels()
                 .scale_y_continuous(labels=lambda xs: ["%.2g" % x for x in xs])
-                .render_args(width=len(parts) * 0.2 + 1, height=5)
+                .render_args(width=len(parts) * 0.2 + 1, height=5, limitsize=False)
                 .render(output_filename)
             )
 
